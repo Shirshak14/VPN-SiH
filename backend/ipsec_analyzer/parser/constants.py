@@ -10,6 +10,7 @@ V1_EXCHANGE = {
     2: "Identity Protection (Main Mode)",
     4: "Aggressive Mode",
     5: "Informational",
+    6: "Transaction (Mode Config / XAUTH)",
     32: "Quick Mode",
     33: "New Group Mode",
 }

@@ -1,0 +1,282 @@
+# IPsec/IKE policy pack. Edit this file to change what is flagged -- no code changes required.
+# Algorithm names are the IANA registry names emitted by the parser (IKEv2 names) plus the
+# IKEv1 names (…_CBC, MD5, SHA1, SHA2_256 …).
+#
+# Basis (document-level references; the tiering is this project's reading of them):
+#   NIST SP 800-77 Rev. 1   Guide to IPsec VPNs
+#   NIST SP 800-131A Rev. 2 Transitioning the Use of Cryptographic Algorithms and Key Lengths
+#   NIST SP 800-57 Pt.1     (112-bit minimum security strength => >=2048-bit MODP / >=224-bit EC)
+#   RFC 8221                ESP/AH cryptographic algorithm implementation requirements
+#   RFC 8247                IKEv2 cryptographic algorithm requirements
+#   RFC 7296                IKEv2;   RFC 2409 IKEv1
+#   RFC 8247 / RFC 4109     MODP-768/1024 and single-DES are MUST NOT / deprecated
+policy:
+  name: "NIST SP 800-77r1 + RFC 8221/8247 baseline"
+  version: "1.0.0"
+
+tiers:               # prohibited < deprecated < acceptable < recommended
+  encryption:
+    prohibited:  [DES, DES_CBC, DES_IV64, DES_IV32, NULL, RC4, IDEA, IDEA_CBC, "3IDEA", RC5, RC5_CBC]
+    deprecated:  ["3DES", "3DES_CBC", BLOWFISH, BLOWFISH_CBC, CAST, CAST_CBC]
+    acceptable:  [AES_CBC, AES_CTR, AES_CCM_8, AES_CCM_12, AES_GCM_8, CAMELLIA_CBC, CAMELLIA_CTR]
+    recommended: [AES_GCM_16, AES_GCM_12, AES_CCM_16, CHACHA20_POLY1305]
+  integrity:
+    prohibited:  [HMAC_MD5_96, HMAC_MD5_128, HMAC_MD5, MD5, KPDK_MD5, DES_MAC, KPDK, HMAC_TIGER, TIGER]
+    deprecated:  [HMAC_SHA1_96, HMAC_SHA1_160, HMAC_SHA1, SHA1]
+    acceptable:  [AES_XCBC_96, AES128_XCBC, AES_CMAC_96, AES128_CMAC]
+    recommended: [HMAC_SHA2_256_128, HMAC_SHA2_384_192, HMAC_SHA2_512_256, HMAC_SHA2_256, HMAC_SHA2_384,
+                  HMAC_SHA2_512, SHA2_256, SHA2_384, SHA2_512, AES_128_GMAC, AES_192_GMAC, AES_256_GMAC]
+  dh:
+    prohibited:  [MODP_768, MODP_1024]
+    deprecated:  [MODP_1536, MODP_1024_160, MODP_2048_224, MODP_2048_256, ECP_192]
+    acceptable:  [MODP_2048, ECP_224, BRAINPOOL_P224]
+    recommended: [MODP_3072, MODP_4096, MODP_6144, MODP_8192, ECP_256, ECP_384, ECP_521,
+                  BRAINPOOL_P256, BRAINPOOL_P384, BRAINPOOL_P512, CURVE_25519, CURVE_448]
+
+thresholds:
+  # Site-policy knobs (not fixed by NIST/RFC text) -- adjust to your environment.
+  max_ike_lifetime_s: 86400        # IKEv1 phase-1 lifetime above this is flagged
+  retransmit_alert: 3              # retransmitted handshake messages in one tunnel
+  esp_replay_ratio: 0.01           # fraction of ESP packets with seq <= highest seen
+  esp_gap_ratio: 0.05              # fraction of missing ESP sequence numbers
+  esp_min_packets: 20              # do not judge ESP sequencing on shorter flows
+
+severity_weight:                   # noisy-OR contribution of one finding, 0..1
+  critical: 0.60
+  high: 0.35
+  medium: 0.18
+  low: 0.06
+  info: 0.0
+
+risk:
+  anomaly_weight: 0.30             # how much a fully anomalous tunnel (score 1.0) can add
+  bands: {critical: 80, high: 60, medium: 30, low: 10}   # >= threshold -> band
+
+rules:
+  - id: IKE-ENC-WEAK
+    title: Weak or prohibited IKE SA encryption algorithm
+    check: suite_tier
+    params: {scope: ike, component: encryption}
+    severity_by_tier: {prohibited: critical, deprecated: high}
+    description: >-
+      The IKE SA protecting the key exchange and control channel negotiated an encryption algorithm
+      that is prohibited or deprecated (single DES, 3DES with 64-bit blocks vulnerable to Sweet32, …).
+    refs: ["NIST SP 800-77r1", "NIST SP 800-131A r2", "RFC 8247"]
+    mitre: [T1040, T1557]
+    remediation: REM-STRONG-CIPHER
+
+  - id: IKE-INTEG-WEAK
+    title: Weak IKE integrity/PRF algorithm
+    check: suite_tier
+    params: {scope: ike, component: integrity}
+    severity_by_tier: {prohibited: high, deprecated: low}
+    description: >-
+      The IKE SA uses HMAC-MD5 (prohibited) or HMAC-SHA-1 (legacy) for integrity/PRF.
+      SHA-1 as an HMAC is not broken but is deprecated in favour of SHA-2.
+    refs: ["NIST SP 800-77r1", "RFC 8247"]
+    mitre: [T1557]
+    remediation: REM-STRONG-INTEG
+
+  - id: IKE-DH-WEAK
+    title: Weak Diffie-Hellman group in IKE SA
+    check: suite_tier
+    params: {scope: ike, component: dh}
+    severity_by_tier: {prohibited: critical, deprecated: medium}
+    description: >-
+      MODP-768/1024 groups provide less than 112 bits of security and are within reach of
+      precomputation attacks against widely reused primes (Logjam class). MODP-1536 is deprecated.
+    refs: ["NIST SP 800-57 Pt.1", "NIST SP 800-77r1", "RFC 8247"]
+    mitre: [T1040, T1557]
+    remediation: REM-STRONG-DH
+
+  - id: ESP-ENC-WEAK
+    title: Weak or prohibited ESP encryption algorithm
+    check: suite_tier
+    params: {scope: child, component: encryption}
+    severity_by_tier: {prohibited: critical, deprecated: high}
+    description: The child SA protecting user traffic negotiated a prohibited or deprecated cipher.
+    refs: ["NIST SP 800-77r1", "RFC 8221"]
+    mitre: [T1040]
+    remediation: REM-STRONG-CIPHER
+
+  - id: ESP-INTEG-WEAK
+    title: Weak ESP integrity algorithm
+    check: suite_tier
+    params: {scope: child, component: integrity}
+    severity_by_tier: {prohibited: high, deprecated: low}
+    description: The child SA uses HMAC-MD5 (prohibited) or HMAC-SHA-1 (legacy) integrity.
+    refs: ["RFC 8221"]
+    mitre: [T1557]
+    remediation: REM-STRONG-INTEG
+
+  - id: ESP-NO-PFS
+    title: Child SA without Perfect Forward Secrecy
+    check: child_no_pfs
+    params: {}
+    severity_by_tier: {}
+    severity: medium
+    description: >-
+      No Diffie-Hellman exchange protects the child SA keys, so compromise of the IKE SA keys
+      (or of the PSK in IKEv1) exposes all traffic ever protected by derived child SAs.
+    refs: ["NIST SP 800-77r1", "RFC 7296 (CREATE_CHILD_SA with KE)"]
+    mitre: [T1040]
+    remediation: REM-ENABLE-PFS
+
+  - id: IKE-AGGR-PSK
+    title: IKEv1 Aggressive Mode with pre-shared key
+    check: aggressive_psk
+    params: {}
+    severity: high
+    description: >-
+      Aggressive Mode sends the responder's authentication HASH in the clear before the peer is
+      authenticated. A passive attacker can capture it and run an offline dictionary attack against
+      the PSK (ike-scan/psk-crack style).
+    refs: ["NIST SP 800-77r1", "RFC 2409 §5.4", "RFC 8247 (IKEv1 obsolete)"]
+    mitre: [T1110.002, T1040]
+    remediation: REM-NO-AGGRESSIVE
+
+  - id: IKE-V1-LEGACY
+    title: IKEv1 in use
+    check: ikev1_used
+    params: {}
+    severity: low
+    description: IKEv1 is legacy; IKEv2 (RFC 7296) fixes identity protection, DoS resistance and rekeying issues.
+    refs: ["NIST SP 800-77r1", "RFC 7296"]
+    mitre: []
+    remediation: REM-MIGRATE-IKEV2
+
+  - id: SA-DOWNGRADE
+    title: Proposal downgrade pattern
+    check: downgrade
+    params: {}
+    severity: high
+    description: >-
+      Either (a) the initiator offered at least one policy-compliant suite yet a weak/prohibited suite
+      was negotiated, or (b) an earlier attempt between the same endpoints was rejected and the retry
+      offered a materially weaker suite. Both are the signature of a downgrade/MITM or a
+      misconfigured responder that pins legacy algorithms.
+    refs: ["RFC 7296 §3.10.1 (NO_PROPOSAL_CHOSEN)", "NIST SP 800-77r1"]
+    mitre: [T1557, T1600]
+    remediation: REM-PIN-PROPOSALS
+
+  - id: IKE-LIFETIME-LONG
+    title: Excessive IKE SA lifetime
+    check: ike_lifetime
+    params: {}
+    severity: low
+    description: Long-lived phase-1 keys increase the amount of traffic exposed by a single key compromise.
+    refs: ["NIST SP 800-77r1 (key lifetime guidance)", "site policy threshold"]
+    mitre: []
+    remediation: REM-SHORTEN-LIFETIME
+
+  - id: SA-RETRANSMIT-EXCESS
+    title: Excessive handshake retransmissions
+    check: retransmits
+    params: {}
+    severity: low
+    description: >-
+      Repeated retransmission of IKE messages indicates loss, an unresponsive peer, or an attacker
+      dropping/delaying handshake packets.
+    refs: ["RFC 7296 §2.1"]
+    mitre: []
+    remediation: REM-CHECK-PATH
+
+  - id: ESP-SEQ-REPLAY
+    title: ESP sequence numbers repeat or go backwards
+    check: esp_replay
+    params: {}
+    severity: medium
+    description: >-
+      Packets carrying already-seen sequence numbers were observed. ESP anti-replay should drop them;
+      a high rate suggests replay injection, a duplicating middlebox, or broken anti-replay.
+    refs: ["RFC 4303 §3.4.3"]
+    mitre: [T1557]
+    remediation: REM-CHECK-REPLAY
+
+  - id: ESP-SEQ-GAPS
+    title: Large ESP sequence gaps
+    check: esp_gaps
+    params: {}
+    severity: low
+    description: A high fraction of ESP sequence numbers are missing from the capture (loss, drop, or capture point asymmetry).
+    refs: ["RFC 4303 §3.3.3"]
+    mitre: []
+    remediation: REM-CHECK-PATH
+
+remediations:
+  REM-STRONG-CIPHER:
+    title: Replace weak ciphers with AES-GCM
+    steps:
+      - Remove DES/3DES/Blowfish/CAST/NULL from every IKE and ESP proposal on both peers.
+      - Prefer AEAD suites (AES-256-GCM-16 or ChaCha20-Poly1305); AES-CBC-256 with HMAC-SHA-2 is the fallback.
+      - Re-key all existing SAs after the change (clear/reload the tunnel) so no legacy SA survives.
+    example: |
+      # strongSwan swanctl.conf
+      proposals     = aes256gcm16-prfsha384-ecp384
+      esp_proposals = aes256gcm16-ecp384
+  REM-STRONG-INTEG:
+    title: Use HMAC-SHA-2 for integrity and PRF
+    steps:
+      - Remove HMAC-MD5 immediately; migrate HMAC-SHA-1 to HMAC-SHA-256 or stronger.
+      - With AEAD ciphers no separate integrity transform is needed.
+    example: |
+      proposals = aes256-sha384-ecp384
+  REM-STRONG-DH:
+    title: Use >=2048-bit MODP or elliptic-curve groups
+    steps:
+      - Drop MODP-768/1024/1536 from all proposals.
+      - Prefer Curve25519 or ECP-384; MODP-3072 or larger if EC is unavailable. MODP-2048 is the floor.
+    example: |
+      proposals = aes256gcm16-prfsha384-curve25519
+  REM-ENABLE-PFS:
+    title: Enable Perfect Forward Secrecy on child SAs
+    steps:
+      - Add a DH/ECDH group to the ESP proposal so every CREATE_CHILD_SA (IKEv2) or Quick Mode (IKEv1) performs a fresh key exchange.
+      - Use the same or a stronger group than the IKE SA.
+    example: |
+      esp_proposals = aes256gcm16-ecp384
+  REM-NO-AGGRESSIVE:
+    title: Disable Aggressive Mode and PSK exposure
+    steps:
+      - Disable IKEv1 Aggressive Mode; migrate to IKEv2 or Main Mode with certificates.
+      - If a PSK cannot be avoided, replace it with a random secret of at least 32 characters and rotate it now -- assume the captured HASH is being cracked.
+    example: |
+      # IKEv2 with certificate authentication
+      local  { auth = pubkey; certs = gw.pem }
+      remote { auth = pubkey }
+  REM-MIGRATE-IKEV2:
+    title: Migrate IKEv1 tunnels to IKEv2
+    steps:
+      - Plan per-peer migration to IKEv2 (RFC 7296); it removes Aggressive Mode and adds cookies/MOBIKE/NAT-T by default.
+    example: |
+      version = 2
+  REM-PIN-PROPOSALS:
+    title: Pin minimum acceptable proposals on the responder and alert on downgrade
+    steps:
+      - Configure the responder to reject any proposal below policy rather than fall back.
+      - Do not let the initiator retry with a weaker list after NO_PROPOSAL_CHOSEN; alert instead.
+      - Investigate the path between the two endpoints for an on-path device modifying IKE_SA_INIT.
+    example: |
+      # responder: only strong proposals; no weak fallback
+      proposals = aes256gcm16-prfsha384-ecp384
+  REM-SHORTEN-LIFETIME:
+    title: Shorten SA lifetimes
+    steps:
+      - Set IKE SA lifetime to 24 h or less and child SA lifetime to 1 h / a volume limit, with PFS on rekey.
+    example: |
+      rekey_time = 4h
+  REM-CHECK-PATH:
+    title: Investigate handshake or ESP loss
+    steps:
+      - Check for path MTU/fragmentation problems, rate limiting of UDP/500/4500, or an on-path device dropping packets.
+  REM-CHECK-REPLAY:
+    title: Investigate ESP replay
+    steps:
+      - Confirm anti-replay window is enabled on both peers and check for duplicating taps/middleboxes.
+      - Compare against the sequence-number trace in the tunnel detail.
+
+mitre_catalog:               # curated -- real ATT&CK Enterprise technique IDs
+  T1040:     {name: "Network Sniffing", tactic: "Credential Access / Discovery", url: "https://attack.mitre.org/techniques/T1040/"}
+  T1557:     {name: "Adversary-in-the-Middle", tactic: "Credential Access / Collection", url: "https://attack.mitre.org/techniques/T1557/"}
+  T1110.002: {name: "Brute Force: Password Cracking", tactic: "Credential Access", url: "https://attack.mitre.org/techniques/T1110/002/"}
+  T1600:     {name: "Weaken Encryption", tactic: "Defense Evasion", url: "https://attack.mitre.org/techniques/T1600/"}
