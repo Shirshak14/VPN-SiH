@@ -1,0 +1,17 @@
+{
+  "_about": "Real third-party captures from the Wireshark test suite (gitlab.com/wireshark/wireshark, test/captures). Oracle values come from Wireshark's own test suite (suite_decryption.py): the decrypted IKEv2 AUTH payload bytes. Keys: ikev2_decryption_table.tmpl in the same repo. IKEv1 files are cross-checked against Scapy's independent ISAKMP dissector.",
+  "provenance": "real-public",
+  "keys": "ikev2_decryption_table.tmpl",
+  "ikev2": {
+    "ikev2-decrypt-3des-sha1_160.pcap":  {"auth_data": "02f7a0d5f1fdc8ea81039818c65bb9bd09af9b8917319b887ff9ba3046c344c7", "encr": "3DES"},
+    "ikev2-decrypt-aes128ccm12.pcap":    {"auth_data": "c2104394299e1ffe7908ea720ad5d13717a0d454e4fa0a2128ea689411f479c4", "encr": "AES_CCM_12"},
+    "ikev2-decrypt-aes128ccm12-2.pcap":  {"auth_data": "aaa281c87b4a19046c57271d557488ca413b57228cb951f5fa9640992a0285b9", "encr": "AES_CCM_12"},
+    "ikev2-decrypt-aes192ctr.pcap":      {"auth_data": "3ec23dcf9348485638407c754547aeb3085290082c49f583fdbae59263a20b4a", "encr": "AES_CTR"},
+    "ikev2-decrypt-aes256cbc.pcapng":    {"auth_data": "e1a8d550064201a7ec024a85758d0673c61c5c510ac13bcd225d6327f50da3d3", "encr": "AES_CBC"},
+    "ikev2-decrypt-aes256ccm16.pcapng":  {"auth_data": "fa2e74bdc01e30fb0b3ddc9723c9449095969da51f69e560209d2c2b7940210a", "encr": "AES_CCM_16"},
+    "ikev2-decrypt-aes256gcm16.pcap":    {"auth_data": "9ab71f14ab553cad873a1aa70b99df155dee77cdcf3694b3b7527acbb9712ded", "encr": "AES_GCM_16"},
+    "ikev2-decrypt-aes256gcm8.pcap":     {"auth_data": "4a66d822d0afbc22ad9a92a2cf4287c920ad8ac3b069a4a7e75fe0a5d499f914", "encr": "AES_GCM_8"}
+  },
+  "ikev1": ["ikev1-certs.pcap", "ikev1-bug-12610.pcapng", "ikev1-bug-12620.pcapng"],
+  "esp": ["esp-bug-12671.pcapng"]
+}

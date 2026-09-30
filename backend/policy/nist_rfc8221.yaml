@@ -50,7 +50,7 @@ severity_weight:                   # noisy-OR contribution of one finding, 0..1
 
 risk:
   anomaly_weight: 0.30             # how much a fully anomalous tunnel (score 1.0) can add
-  bands: {critical: 80, high: 60, medium: 30, low: 10}   # >= threshold -> band
+  bands: {critical: 55, high: 33, medium: 15, low: 5}     # >= threshold -> band; one medium finding = 18 -> 'medium'
 
 rules:
   - id: IKE-ENC-WEAK

@@ -1,0 +1,1132 @@
+{
+ "generated_at": "2026-09-30T16:31:12+00:00",
+ "alert_threshold_risk": 15.0,
+ "corpus": {
+  "captures": 309,
+  "tunnels_by_label": {
+   "behavioral": 38,
+   "benign": 203,
+   "downgrade": 20,
+   "weak-config": 58
+  },
+  "provenance": "synthetic (see README)"
+ },
+ "synthetic": {
+  "keys_provided": true,
+  "tunnels_evaluated": 168,
+  "detection": {
+   "combined": {
+    "tp": 91,
+    "fp": 2,
+    "fn": 17,
+    "tn": 58,
+    "precision": 0.978494623655914,
+    "recall": 0.8425925925925926,
+    "f1": 0.9054726368159204,
+    "false_positive_rate": 0.03333333333333333
+   },
+   "rules": {
+    "tp": 78,
+    "fp": 0,
+    "fn": 30,
+    "tn": 60,
+    "precision": 1.0,
+    "recall": 0.7222222222222222,
+    "f1": 0.8387096774193548,
+    "false_positive_rate": 0.0
+   },
+   "ml": {
+    "tp": 18,
+    "fp": 2,
+    "fn": 90,
+    "tn": 58,
+    "precision": 0.9,
+    "recall": 0.16666666666666666,
+    "f1": 0.28125,
+    "false_positive_rate": 0.03333333333333333
+   }
+  },
+  "per_family": {
+   "a_esp_replay": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "a_half_open_scan": {
+    "n": 6,
+    "combined": 1,
+    "rules": 0,
+    "ml": 1
+   },
+   "a_oversize_handshake": {
+    "n": 6,
+    "combined": 6,
+    "rules": 0,
+    "ml": 6
+   },
+   "a_rekey_storm": {
+    "n": 6,
+    "combined": 5,
+    "rules": 0,
+    "ml": 5
+   },
+   "a_retransmit_burst": {
+    "n": 6,
+    "combined": 1,
+    "rules": 0,
+    "ml": 1
+   },
+   "a_slow_relay": {
+    "n": 6,
+    "combined": 0,
+    "rules": 0,
+    "ml": 0
+   },
+   "b_acceptable": {
+    "n": 12,
+    "combined": 0,
+    "rules": 0,
+    "ml": 0
+   },
+   "b_legacy_sha1": {
+    "n": 12,
+    "combined": 0,
+    "rules": 0,
+    "ml": 0
+   },
+   "b_modern": {
+    "n": 12,
+    "combined": 0,
+    "rules": 0,
+    "ml": 0
+   },
+   "b_multi_offer": {
+    "n": 12,
+    "combined": 1,
+    "rules": 0,
+    "ml": 1
+   },
+   "b_v1_strong": {
+    "n": 12,
+    "combined": 1,
+    "rules": 0,
+    "ml": 1
+   },
+   "d_dh_only": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "d_offer_strong_chose_weak": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "d_retry_after_reject": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 1
+   },
+   "w_esp_weak": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "w_ike_3des": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 1
+   },
+   "w_ike_dh1024": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "w_ike_md5": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "w_legacy_combo": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "w_long_lifetime": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "w_no_pfs": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 1
+   },
+   "w_v1_aggr_psk": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "w_v1_main_legacy": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 2
+   }
+  },
+  "rule_level": {
+   "tp": 287,
+   "fp": 0,
+   "fn": 0,
+   "tn": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "false_positive_rate": null,
+   "per_rule": {
+    "ESP-ENC-WEAK": {
+     "tp": 24,
+     "fp": 0,
+     "fn": 0
+    },
+    "ESP-INTEG-WEAK": {
+     "tp": 41,
+     "fp": 0,
+     "fn": 0
+    },
+    "ESP-NO-PFS": {
+     "tp": 14,
+     "fp": 0,
+     "fn": 0
+    },
+    "ESP-SEQ-GAPS": {
+     "tp": 5,
+     "fp": 0,
+     "fn": 0
+    },
+    "ESP-SEQ-REPLAY": {
+     "tp": 6,
+     "fp": 0,
+     "fn": 0
+    },
+    "IKE-AGGR-PSK": {
+     "tp": 12,
+     "fp": 0,
+     "fn": 0
+    },
+    "IKE-DH-WEAK": {
+     "tp": 43,
+     "fp": 0,
+     "fn": 0
+    },
+    "IKE-ENC-WEAK": {
+     "tp": 31,
+     "fp": 0,
+     "fn": 0
+    },
+    "IKE-INTEG-WEAK": {
+     "tp": 48,
+     "fp": 0,
+     "fn": 0
+    },
+    "IKE-LIFETIME-LONG": {
+     "tp": 6,
+     "fp": 0,
+     "fn": 0
+    },
+    "IKE-V1-LEGACY": {
+     "tp": 30,
+     "fp": 0,
+     "fn": 0
+    },
+    "SA-DOWNGRADE": {
+     "tp": 18,
+     "fp": 0,
+     "fn": 0
+    },
+    "SA-RETRANSMIT-EXCESS": {
+     "tp": 9,
+     "fp": 0,
+     "fn": 0
+    }
+   }
+  },
+  "parse_accuracy": {
+   "auth_method": {
+    "ok": 132,
+    "total": 132,
+    "accuracy": 1.0
+   },
+   "child_sa_suite": {
+    "ok": 132,
+    "total": 132,
+    "accuracy": 1.0
+   },
+   "esp_packets_parsed": {
+    "ok": 168,
+    "total": 168,
+    "accuracy": 1.0
+   },
+   "ike_datagrams_parsed": {
+    "ok": 168,
+    "total": 168,
+    "accuracy": 1.0
+   },
+   "ike_suite": {
+    "ok": 168,
+    "total": 168,
+    "accuracy": 1.0
+   },
+   "ike_version": {
+    "ok": 168,
+    "total": 168,
+    "accuracy": 1.0
+   },
+   "tunnel_reconstructed": {
+    "ok": 168,
+    "total": 168,
+    "accuracy": 1.0
+   }
+  },
+  "missed": [
+   {
+    "capture": "a_half_open_scan_00",
+    "family": "a_half_open_scan",
+    "risk": 16.6
+   },
+   {
+    "capture": "a_half_open_scan_01",
+    "family": "a_half_open_scan",
+    "risk": 11.2
+   },
+   {
+    "capture": "a_half_open_scan_03",
+    "family": "a_half_open_scan",
+    "risk": 16.6
+   },
+   {
+    "capture": "a_half_open_scan_04",
+    "family": "a_half_open_scan",
+    "risk": 11.2
+   },
+   {
+    "capture": "a_half_open_scan_05",
+    "family": "a_half_open_scan",
+    "risk": 17.0
+   },
+   {
+    "capture": "a_rekey_storm_05",
+    "family": "a_rekey_storm",
+    "risk": 9.3
+   },
+   {
+    "capture": "a_retransmit_burst_00",
+    "family": "a_retransmit_burst",
+    "risk": 19.0
+   },
+   {
+    "capture": "a_retransmit_burst_01",
+    "family": "a_retransmit_burst",
+    "risk": 19.0
+   },
+   {
+    "capture": "a_retransmit_burst_03",
+    "family": "a_retransmit_burst",
+    "risk": 19.0
+   },
+   {
+    "capture": "a_retransmit_burst_04",
+    "family": "a_retransmit_burst",
+    "risk": 19.9
+   },
+   {
+    "capture": "a_retransmit_burst_05",
+    "family": "a_retransmit_burst",
+    "risk": 19.0
+   },
+   {
+    "capture": "a_slow_relay_00",
+    "family": "a_slow_relay",
+    "risk": 14.8
+   },
+   {
+    "capture": "a_slow_relay_01",
+    "family": "a_slow_relay",
+    "risk": 13.8
+   },
+   {
+    "capture": "a_slow_relay_02",
+    "family": "a_slow_relay",
+    "risk": 13.8
+   },
+   {
+    "capture": "a_slow_relay_03",
+    "family": "a_slow_relay",
+    "risk": 13.8
+   },
+   {
+    "capture": "a_slow_relay_04",
+    "family": "a_slow_relay",
+    "risk": 13.8
+   },
+   {
+    "capture": "a_slow_relay_05",
+    "family": "a_slow_relay",
+    "risk": 12.8
+   }
+  ],
+  "false_alarms": [
+   {
+    "capture": "b_multi_offer_39",
+    "family": "b_multi_offer",
+    "risk": 16.0,
+    "rules": [],
+    "anomaly": 0.5327
+   },
+   {
+    "capture": "b_v1_strong_17",
+    "family": "b_v1_strong",
+    "risk": 21.3,
+    "rules": [
+     "IKE-V1-LEGACY"
+    ],
+    "anomaly": 0.5409
+   }
+  ]
+ },
+ "synthetic_no_keys": {
+  "keys_provided": false,
+  "tunnels_evaluated": 168,
+  "detection": {
+   "combined": {
+    "tp": 80,
+    "fp": 2,
+    "fn": 28,
+    "tn": 58,
+    "precision": 0.975609756097561,
+    "recall": 0.7407407407407407,
+    "f1": 0.8421052631578947,
+    "false_positive_rate": 0.03333333333333333
+   },
+   "rules": {
+    "tp": 66,
+    "fp": 0,
+    "fn": 42,
+    "tn": 60,
+    "precision": 1.0,
+    "recall": 0.6111111111111112,
+    "f1": 0.7586206896551725,
+    "false_positive_rate": 0.0
+   },
+   "ml": {
+    "tp": 18,
+    "fp": 2,
+    "fn": 90,
+    "tn": 58,
+    "precision": 0.9,
+    "recall": 0.16666666666666666,
+    "f1": 0.28125,
+    "false_positive_rate": 0.03333333333333333
+   }
+  },
+  "per_family": {
+   "a_esp_replay": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "a_half_open_scan": {
+    "n": 6,
+    "combined": 1,
+    "rules": 0,
+    "ml": 1
+   },
+   "a_oversize_handshake": {
+    "n": 6,
+    "combined": 6,
+    "rules": 0,
+    "ml": 6
+   },
+   "a_rekey_storm": {
+    "n": 6,
+    "combined": 5,
+    "rules": 0,
+    "ml": 5
+   },
+   "a_retransmit_burst": {
+    "n": 6,
+    "combined": 1,
+    "rules": 0,
+    "ml": 1
+   },
+   "a_slow_relay": {
+    "n": 6,
+    "combined": 0,
+    "rules": 0,
+    "ml": 0
+   },
+   "b_acceptable": {
+    "n": 12,
+    "combined": 0,
+    "rules": 0,
+    "ml": 0
+   },
+   "b_legacy_sha1": {
+    "n": 12,
+    "combined": 0,
+    "rules": 0,
+    "ml": 0
+   },
+   "b_modern": {
+    "n": 12,
+    "combined": 0,
+    "rules": 0,
+    "ml": 0
+   },
+   "b_multi_offer": {
+    "n": 12,
+    "combined": 1,
+    "rules": 0,
+    "ml": 1
+   },
+   "b_v1_strong": {
+    "n": 12,
+    "combined": 1,
+    "rules": 0,
+    "ml": 1
+   },
+   "d_dh_only": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "d_offer_strong_chose_weak": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "d_retry_after_reject": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 1
+   },
+   "w_esp_weak": {
+    "n": 6,
+    "combined": 0,
+    "rules": 0,
+    "ml": 0
+   },
+   "w_ike_3des": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 1
+   },
+   "w_ike_dh1024": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "w_ike_md5": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "w_legacy_combo": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "w_long_lifetime": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "w_no_pfs": {
+    "n": 6,
+    "combined": 1,
+    "rules": 0,
+    "ml": 1
+   },
+   "w_v1_aggr_psk": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 0
+   },
+   "w_v1_main_legacy": {
+    "n": 6,
+    "combined": 6,
+    "rules": 6,
+    "ml": 2
+   }
+  },
+  "rule_level": {
+   "tp": 208,
+   "fp": 0,
+   "fn": 79,
+   "tn": 0,
+   "precision": 1.0,
+   "recall": 0.7247386759581882,
+   "f1": 0.8404040404040405,
+   "false_positive_rate": null,
+   "per_rule": {
+    "ESP-ENC-WEAK": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 24
+    },
+    "ESP-INTEG-WEAK": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 41
+    },
+    "ESP-NO-PFS": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 14
+    },
+    "ESP-SEQ-GAPS": {
+     "tp": 5,
+     "fp": 0,
+     "fn": 0
+    },
+    "ESP-SEQ-REPLAY": {
+     "tp": 6,
+     "fp": 0,
+     "fn": 0
+    },
+    "IKE-AGGR-PSK": {
+     "tp": 12,
+     "fp": 0,
+     "fn": 0
+    },
+    "IKE-DH-WEAK": {
+     "tp": 43,
+     "fp": 0,
+     "fn": 0
+    },
+    "IKE-ENC-WEAK": {
+     "tp": 31,
+     "fp": 0,
+     "fn": 0
+    },
+    "IKE-INTEG-WEAK": {
+     "tp": 48,
+     "fp": 0,
+     "fn": 0
+    },
+    "IKE-LIFETIME-LONG": {
+     "tp": 6,
+     "fp": 0,
+     "fn": 0
+    },
+    "IKE-V1-LEGACY": {
+     "tp": 30,
+     "fp": 0,
+     "fn": 0
+    },
+    "SA-DOWNGRADE": {
+     "tp": 18,
+     "fp": 0,
+     "fn": 0
+    },
+    "SA-RETRANSMIT-EXCESS": {
+     "tp": 9,
+     "fp": 0,
+     "fn": 0
+    }
+   }
+  },
+  "parse_accuracy": {
+   "esp_packets_parsed": {
+    "ok": 168,
+    "total": 168,
+    "accuracy": 1.0
+   },
+   "ike_datagrams_parsed": {
+    "ok": 168,
+    "total": 168,
+    "accuracy": 1.0
+   },
+   "ike_suite": {
+    "ok": 168,
+    "total": 168,
+    "accuracy": 1.0
+   },
+   "ike_version": {
+    "ok": 168,
+    "total": 168,
+    "accuracy": 1.0
+   },
+   "tunnel_reconstructed": {
+    "ok": 168,
+    "total": 168,
+    "accuracy": 1.0
+   }
+  },
+  "missed": [
+   {
+    "capture": "a_half_open_scan_00",
+    "family": "a_half_open_scan",
+    "risk": 16.6
+   },
+   {
+    "capture": "a_half_open_scan_01",
+    "family": "a_half_open_scan",
+    "risk": 11.2
+   },
+   {
+    "capture": "a_half_open_scan_03",
+    "family": "a_half_open_scan",
+    "risk": 16.6
+   },
+   {
+    "capture": "a_half_open_scan_04",
+    "family": "a_half_open_scan",
+    "risk": 11.2
+   },
+   {
+    "capture": "a_half_open_scan_05",
+    "family": "a_half_open_scan",
+    "risk": 17.0
+   },
+   {
+    "capture": "a_rekey_storm_05",
+    "family": "a_rekey_storm",
+    "risk": 9.3
+   },
+   {
+    "capture": "a_retransmit_burst_00",
+    "family": "a_retransmit_burst",
+    "risk": 19.0
+   },
+   {
+    "capture": "a_retransmit_burst_01",
+    "family": "a_retransmit_burst",
+    "risk": 19.0
+   },
+   {
+    "capture": "a_retransmit_burst_03",
+    "family": "a_retransmit_burst",
+    "risk": 19.0
+   },
+   {
+    "capture": "a_retransmit_burst_04",
+    "family": "a_retransmit_burst",
+    "risk": 19.9
+   },
+   {
+    "capture": "a_retransmit_burst_05",
+    "family": "a_retransmit_burst",
+    "risk": 19.0
+   },
+   {
+    "capture": "a_slow_relay_00",
+    "family": "a_slow_relay",
+    "risk": 14.8
+   },
+   {
+    "capture": "a_slow_relay_01",
+    "family": "a_slow_relay",
+    "risk": 13.8
+   },
+   {
+    "capture": "a_slow_relay_02",
+    "family": "a_slow_relay",
+    "risk": 13.8
+   },
+   {
+    "capture": "a_slow_relay_03",
+    "family": "a_slow_relay",
+    "risk": 13.8
+   },
+   {
+    "capture": "a_slow_relay_04",
+    "family": "a_slow_relay",
+    "risk": 13.8
+   },
+   {
+    "capture": "a_slow_relay_05",
+    "family": "a_slow_relay",
+    "risk": 12.8
+   },
+   {
+    "capture": "w_esp_weak_00",
+    "family": "w_esp_weak",
+    "risk": 0.1
+   },
+   {
+    "capture": "w_esp_weak_01",
+    "family": "w_esp_weak",
+    "risk": 5.5
+   },
+   {
+    "capture": "w_esp_weak_02",
+    "family": "w_esp_weak",
+    "risk": 5.5
+   },
+   {
+    "capture": "w_esp_weak_03",
+    "family": "w_esp_weak",
+    "risk": 6.0
+   },
+   {
+    "capture": "w_esp_weak_04",
+    "family": "w_esp_weak",
+    "risk": 9.4
+   },
+   {
+    "capture": "w_esp_weak_05",
+    "family": "w_esp_weak",
+    "risk": 7.0
+   },
+   {
+    "capture": "w_no_pfs_00",
+    "family": "w_no_pfs",
+    "risk": 1.6
+   },
+   {
+    "capture": "w_no_pfs_01",
+    "family": "w_no_pfs",
+    "risk": 6.4
+   },
+   {
+    "capture": "w_no_pfs_02",
+    "family": "w_no_pfs",
+    "risk": 1.7
+   },
+   {
+    "capture": "w_no_pfs_04",
+    "family": "w_no_pfs",
+    "risk": 5.7
+   },
+   {
+    "capture": "w_no_pfs_05",
+    "family": "w_no_pfs",
+    "risk": 0.9
+   }
+  ],
+  "false_alarms": [
+   {
+    "capture": "b_multi_offer_39",
+    "family": "b_multi_offer",
+    "risk": 16.0,
+    "rules": [],
+    "anomaly": 0.5327
+   },
+   {
+    "capture": "b_v1_strong_17",
+    "family": "b_v1_strong",
+    "risk": 21.3,
+    "rules": [
+     "IKE-V1-LEGACY"
+    ],
+    "anomaly": 0.5409
+   }
+  ]
+ },
+ "real_public": {
+  "summary": {
+   "ikev2_decrypt_auth_bytes_match_wireshark": {
+    "ok": 8,
+    "total": 8
+   },
+   "ike_message_count_matches_scapy": {
+    "ok": 12,
+    "total": 12
+   },
+   "esp_packet_count_matches_scapy": {
+    "ok": 4,
+    "total": 4
+   },
+   "ikev1_transform_attributes_match_scapy": {
+    "ok": 3,
+    "total": 3
+   }
+  },
+  "checks": [
+   {
+    "kind": "ikev2_decrypt_auth_bytes_match_wireshark",
+    "file": "ikev2-decrypt-3des-sha1_160.pcap",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "kind": "ike_message_count_matches_scapy",
+    "file": "ikev2-decrypt-3des-sha1_160.pcap",
+    "ok": true,
+    "detail": "ours=6 scapy=6"
+   },
+   {
+    "kind": "ikev2_decrypt_auth_bytes_match_wireshark",
+    "file": "ikev2-decrypt-aes128ccm12.pcap",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "kind": "ike_message_count_matches_scapy",
+    "file": "ikev2-decrypt-aes128ccm12.pcap",
+    "ok": true,
+    "detail": "ours=6 scapy=6"
+   },
+   {
+    "kind": "ikev2_decrypt_auth_bytes_match_wireshark",
+    "file": "ikev2-decrypt-aes128ccm12-2.pcap",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "kind": "ike_message_count_matches_scapy",
+    "file": "ikev2-decrypt-aes128ccm12-2.pcap",
+    "ok": true,
+    "detail": "ours=6 scapy=6"
+   },
+   {
+    "kind": "ikev2_decrypt_auth_bytes_match_wireshark",
+    "file": "ikev2-decrypt-aes192ctr.pcap",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "kind": "ike_message_count_matches_scapy",
+    "file": "ikev2-decrypt-aes192ctr.pcap",
+    "ok": true,
+    "detail": "ours=6 scapy=6"
+   },
+   {
+    "kind": "ikev2_decrypt_auth_bytes_match_wireshark",
+    "file": "ikev2-decrypt-aes256cbc.pcapng",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "kind": "ike_message_count_matches_scapy",
+    "file": "ikev2-decrypt-aes256cbc.pcapng",
+    "ok": true,
+    "detail": "ours=4 scapy=4"
+   },
+   {
+    "kind": "ikev2_decrypt_auth_bytes_match_wireshark",
+    "file": "ikev2-decrypt-aes256ccm16.pcapng",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "kind": "ike_message_count_matches_scapy",
+    "file": "ikev2-decrypt-aes256ccm16.pcapng",
+    "ok": true,
+    "detail": "ours=4 scapy=4"
+   },
+   {
+    "kind": "ikev2_decrypt_auth_bytes_match_wireshark",
+    "file": "ikev2-decrypt-aes256gcm16.pcap",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "kind": "ike_message_count_matches_scapy",
+    "file": "ikev2-decrypt-aes256gcm16.pcap",
+    "ok": true,
+    "detail": "ours=6 scapy=6"
+   },
+   {
+    "kind": "ikev2_decrypt_auth_bytes_match_wireshark",
+    "file": "ikev2-decrypt-aes256gcm8.pcap",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "kind": "ike_message_count_matches_scapy",
+    "file": "ikev2-decrypt-aes256gcm8.pcap",
+    "ok": true,
+    "detail": "ours=6 scapy=6"
+   },
+   {
+    "kind": "ike_message_count_matches_scapy",
+    "file": "ikev1-certs.pcap",
+    "ok": true,
+    "detail": "ours=10 scapy=10"
+   },
+   {
+    "kind": "esp_packet_count_matches_scapy",
+    "file": "ikev1-certs.pcap",
+    "ok": true,
+    "detail": "ours=0 scapy=0"
+   },
+   {
+    "kind": "ike_message_count_matches_scapy",
+    "file": "ikev1-bug-12610.pcapng",
+    "ok": true,
+    "detail": "ours=16 scapy=16"
+   },
+   {
+    "kind": "esp_packet_count_matches_scapy",
+    "file": "ikev1-bug-12610.pcapng",
+    "ok": true,
+    "detail": "ours=0 scapy=0"
+   },
+   {
+    "kind": "ike_message_count_matches_scapy",
+    "file": "ikev1-bug-12620.pcapng",
+    "ok": true,
+    "detail": "ours=10 scapy=10"
+   },
+   {
+    "kind": "esp_packet_count_matches_scapy",
+    "file": "ikev1-bug-12620.pcapng",
+    "ok": true,
+    "detail": "ours=0 scapy=0"
+   },
+   {
+    "kind": "ike_message_count_matches_scapy",
+    "file": "esp-bug-12671.pcapng",
+    "ok": true,
+    "detail": "ours=0 scapy=0"
+   },
+   {
+    "kind": "esp_packet_count_matches_scapy",
+    "file": "esp-bug-12671.pcapng",
+    "ok": true,
+    "detail": "ours=6 scapy=6"
+   },
+   {
+    "kind": "ikev1_transform_attributes_match_scapy",
+    "file": "ikev1-certs.pcap",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "kind": "ikev1_transform_attributes_match_scapy",
+    "file": "ikev1-bug-12610.pcapng",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "kind": "ikev1_transform_attributes_match_scapy",
+    "file": "ikev1-bug-12620.pcapng",
+    "ok": true,
+    "detail": ""
+   }
+  ],
+  "total_ok": 27,
+  "total": 27
+ },
+ "throughput": {
+  "captures": 309,
+  "packets": 88433,
+  "megabytes": 48.44,
+  "parse_packets_per_s": 67475,
+  "parse_mb_per_s": 36.96,
+  "end_to_end_packets_per_s": 47229,
+  "largest_capture": "demo_gateway_audit"
+ },
+ "anomaly_model": {
+  "n_train": 140,
+  "n_estimators": 200,
+  "calibration": {
+   "first message size": {
+    "median": 0.5112011657493871,
+    "p99": 0.7027272207931944
+   },
+   "message size": {
+    "median": 0.4813933143694154,
+    "p99": 0.7097695552086244
+   },
+   "handshake timing": {
+    "median": 0.4160218794538056,
+    "p99": 0.7888419442696533
+   },
+   "reliability": {
+    "median": 0.4312840829152164,
+    "p99": 0.7861082063662234
+   },
+   "proposal pattern": {
+    "median": 0.4458552765184737,
+    "p99": 0.6226914201027788
+   },
+   "rekey rate": {
+    "median": 0.44378606319731984,
+    "p99": 0.7564664307193367
+   }
+  },
+  "feature_medians": {
+   "ike_version": 2.0,
+   "aggressive": 0.0,
+   "msg_count": 11.0,
+   "mean_msg_bytes": 241.25,
+   "first_msg_bytes": 440.0,
+   "handshake_bytes": 1716.0,
+   "first_rtt_ms": 49.38054084777832,
+   "mean_hs_gap_ms": 44.37220096588135,
+   "max_hs_gap_ms": 60.74953079223633,
+   "retransmits": 0.0,
+   "max_retransmit_streak": 0.0,
+   "cookie_challenges": 0.0,
+   "n_offered": 1.0,
+   "chosen_rank": 2.0,
+   "best_offered_rank": 2.0,
+   "rank_drop": 0.0,
+   "failed_prior_attempts": 0.0,
+   "incomplete": 0.0,
+   "create_child_per_min": 1.3740943141902178,
+   "dpd_messages": 4.0,
+   "fragments": 0.0,
+   "natt": 0.0,
+   "esp_flows": 2.0,
+   "esp_packets": 239.0,
+   "esp_mean_len": 505.647238514174,
+   "esp_mean_iat_ms": 26.09783597582532,
+   "esp_replay_ratio": 0.0,
+   "esp_gap_ratio": 0.0,
+   "duration_s": 26.225438952445984
+  },
+  "trained_on": "140 benign tunnels",
+  "groups": {
+   "first message size": [
+    "first_msg_bytes"
+   ],
+   "message size": [
+    "mean_msg_bytes"
+   ],
+   "handshake timing": [
+    "first_rtt_ms",
+    "max_hs_gap_ms"
+   ],
+   "reliability": [
+    "retransmits",
+    "cookie_challenges",
+    "incomplete",
+    "failed_prior_attempts"
+   ],
+   "proposal pattern": [
+    "ike_version",
+    "aggressive",
+    "n_offered"
+   ],
+   "rekey rate": [
+    "create_child_per_min"
+   ]
+  }
+ }
+}

@@ -6,3 +6,6 @@ dist/
 .pytest_cache/
 *.db
 backend/models/*.joblib
+data/captures/synthetic/
+data/_lab_tmp/
+backend/models/

@@ -109,11 +109,11 @@ def _decrypt_sk(msg: IkeMessage, keys: IkeSaKeys, body: bytes) -> bytes:
             if len(ct) % 16:
                 raise IkeParseError("CBC ciphertext not block aligned")
             pt = Cipher(algorithms.AES(key), modes.CBC(iv)).decryptor().update(ct)
-        elif enc.startswith("3DES"):
+        elif enc.startswith("3DES") or enc == "DES":  # single DES = TripleDES with an 8-byte key
             iv, ct = body[:8], body[8: len(body) - icv]
             if len(ct) % 8:
                 raise IkeParseError("3DES ciphertext not block aligned")
-            pt = Cipher(TripleDES(key), modes.CBC(iv)).decryptor().update(ct)
+            pt = Cipher(TripleDES(key * 3 if enc == "DES" else key), modes.CBC(iv)).decryptor().update(ct)
         else:
             raise IkeParseError(f"unsupported encryption algorithm in key table: {enc}")
     except InvalidTag as e:

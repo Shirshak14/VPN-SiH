@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..sa.models import Suite, Tunnel
-from .policy import Policy, load_policy
+from .policy import TIER_RANK, Policy, load_policy
 
 Evidence = dict[str, Any]
 
@@ -118,8 +118,7 @@ def _suite_tier(t: Tunnel, eng: RuleEngine, params: dict, rule: dict) -> CheckRe
             suites.append(("IKE SA", t.chosen))
     else:
         suites += [(f"{c.protocol} child ({c.via})", c.suite) for c in t.child_sas]
-    results: CheckResult = []
-    worst: dict[str, tuple[int, Evidence]] = {}
+    offenders: list[Evidence] = []
     for where, s in suites:
         for cat, alg, label in _suite_component(s, params["component"]):
             tier = eng.policy.tier(cat, alg)
@@ -127,11 +126,13 @@ def _suite_tier(t: Tunnel, eng: RuleEngine, params: dict, rule: dict) -> CheckRe
                 ev = {"algorithm": alg, "component": label, "tier": tier, "where": where, "negotiated": s.label()}
                 if s.encr_bits and label == "encryption":
                     ev["key_bits"] = s.encr_bits
-                key = f"{tier}:{alg}"
-                worst.setdefault(key, (0, ev))
-    for key, (_n, ev) in worst.items():
-        results.append((ev["tier"], ev))
-    return results
+                if not any(o["algorithm"] == alg and o["where"] == where and o["component"] == label for o in offenders):
+                    offenders.append(ev)
+    if not offenders:
+        return []
+    # One finding per rule per tunnel: severity of the worst offender, all offenders listed as evidence.
+    worst = min(offenders, key=lambda o: TIER_RANK[o["tier"]])
+    return [(worst["tier"], {**worst, "all_offenders": offenders})]
 
 
 @check("child_no_pfs")
