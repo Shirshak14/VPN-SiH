@@ -5,6 +5,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ /app/backend/
 COPY docs/ /app/docs/
 COPY data/public/ /app/data/public/
+COPY data/captures/lab/ /app/data/captures/lab/
 ENV DATA_DIR=/app/data PYTHONWARNINGS=ignore
 # Regenerate the simulated corpus and train the anomaly baseline at build time (deterministic seeds).
 RUN python -m synth.generate --out /app/data/captures --benign-per-family 40 \

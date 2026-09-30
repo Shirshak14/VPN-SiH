@@ -88,6 +88,15 @@ def _samples() -> dict[str, dict[str, Any]]:
                           "keys": CAPTURES / m["keys"] if m.get("keys") else None,
                           "description": "Simulated multi-tunnel gateway capture (11 tunnels: compliant, weak, downgrade, anomalous)"
                           if n == "demo_gateway_audit" else f"Simulated single-tunnel scenario: {m['family']}"}
+    lm = CAPTURES / "lab" / "manifest.json"
+    if lm.exists():
+        lab = json.loads(lm.read_text())
+        for n in ("ok_aes256gcm_ecp384", "weak_des_md5_modp768", "downgrade_retry_after_reject", "weak_ikev1_aggressive_psk"):
+            if n in lab and (CAPTURES / "lab" / lab[n]["file"]).exists():
+                m = lab[n]
+                out[n] = {"name": n, "provenance": "real-lab", "pcap": CAPTURES / "lab" / m["file"],
+                          "keys": CAPTURES / "lab" / m["keys"] if m.get("keys") else None,
+                          "description": f"Real strongSwan 5.9.8 traffic from the Docker lab. Scenario: {m['description']}"}
     pm = PUBLIC / "manifest.json"
     if pm.exists():
         man = json.loads(pm.read_text())

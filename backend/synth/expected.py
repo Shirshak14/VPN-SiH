@@ -52,7 +52,7 @@ def expected_rules(spec, policy: Policy, flow_stats: list[tuple[int, int, int]])
             esp_rules.add("ESP-ENC-WEAK")
         if ce.integ and policy.tier("integrity", ce.integ) in _BAD:
             esp_rules.add("ESP-INTEG-WEAK")
-        if not ce.dh or (spec.child_rekeys and not spec.rekey_uses_ke):
+        if spec.child_rekeys and (not ce.dh or not spec.rekey_uses_ke):  # PFS judged from rekeys only
             esp_rules.add("ESP-NO-PFS")
     exp |= esp_rules
     # downgrade

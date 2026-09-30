@@ -57,14 +57,14 @@ def _benign(name: str, ike: str, esp: str, *, v: int = 2, **kw) -> Scenario:
 
 SCENARIOS: list[Scenario] = [
     # ---- benign / policy-compliant baseline (IKEv2, PFS on) ----
-    _benign("ok_aes256gcm_ecp384", "aes256gcm16-prfsha384-ecp384", "aes256gcm16-ecp384", rekey_time="20s", child_rekey_time="8s", ping_count=40),
+    _benign("ok_aes256gcm_ecp384", "aes256gcm16-prfsha384-ecp384", "aes256gcm16-ecp384", child_rekey_time="8s", ping_count=40),
     _benign("ok_aes256gcm_curve25519", "aes256gcm16-prfsha384-curve25519", "aes256gcm16-curve25519", ping_count=25),
     _benign("ok_aes256_sha384_modp3072", "aes256-sha384-modp3072", "aes256-sha384-modp3072", child_rekey_time="10s", ping_count=35),
     _benign("ok_aes256_sha256_modp2048", "aes256-sha256-modp2048", "aes256-sha256-modp2048", ping_count=30),
     _benign("ok_aes128_sha256_modp2048", "aes128-sha256-modp2048", "aes128-sha256-modp2048", ping_count=15, ping_interval=0.4),
     _benign("ok_aes128gcm_ecp256", "aes128gcm16-prfsha256-ecp256", "aes128gcm16-ecp256", ping_count=50, ping_interval=0.1),
     _benign("ok_aes256_sha512_modp4096", "aes256-sha512-modp4096", "aes256-sha512-modp4096", ping_count=20),
-    _benign("ok_aes192_sha384_ecp384", "aes192-sha384-ecp384", "aes192-sha384-ecp384", rekey_time="15s", ping_count=30),
+    _benign("ok_aes192_sha384_ecp384", "aes192-sha384-ecp384", "aes192-sha384-ecp384", child_rekey_time="9s", ping_count=30),
     _benign("ok_aes256_sha256_ecp256_b", "aes256-sha256-ecp256", "aes256-sha256-ecp256", ping_count=45, ping_interval=0.15),
     _benign("ok_aes256gcm_modp3072", "aes256gcm16-prfsha384-modp3072", "aes256gcm16-modp3072", child_rekey_time="9s", ping_count=30),
     _benign("ok_aes128_sha256_curve25519", "aes128-sha256-curve25519", "aes128-sha256-curve25519", ping_count=25),
@@ -109,8 +109,8 @@ SCENARIOS: list[Scenario] = [
         expect_rules=["IKE-ENC-WEAK", "IKE-DH-WEAK", "IKE-INTEG-WEAK", "IKE-V1-LEGACY", "ESP-ENC-WEAK", "ESP-INTEG-WEAK"],
     ),
     Scenario(
-        "weak_ikev1_main_aes_modp2048", WEAK,
-        "IKEv1 Main Mode with PSK, AES-256/SHA-256/MODP-2048 (crypto OK, protocol legacy)",
+        "weak_ikev1_main_aes_modp2048", BENIGN,
+        "IKEv1 Main Mode with PSK, AES-256/SHA-256/MODP-2048 (crypto OK; only the low-severity 'IKEv1 in use' advisory applies)",
         ike_version=1,
         init_ike="aes256-sha256-modp2048", init_esp="aes256-sha256-modp2048",
         expect_rules=["IKE-V1-LEGACY"],

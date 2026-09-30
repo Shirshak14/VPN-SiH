@@ -57,7 +57,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .badge.info { background: var(--info-bg); color: var(--info); }
 .badge.ok { background: var(--ok-bg); color: var(--ok); }
 .badge.prov-synthetic { background: var(--warn-bg); color: var(--medium); border: 1px solid var(--warn-line); }
-.badge.prov-real-public { background: var(--ok-bg); color: var(--ok); }
+.badge.prov-real-lab, .badge.prov-real-public { background: var(--ok-bg); color: var(--ok); }
 .badge.prov-user-upload { background: var(--info-bg); color: var(--info); }
 .banner { border: 1px solid var(--warn-line); background: var(--warn-bg); padding: 10px 14px; border-radius: var(--radius); font-size: 13px; }
 .banner.err { border-color: var(--critical); background: var(--critical-bg); color: var(--critical); }

@@ -12,7 +12,7 @@ Setup: API on :8000, UI on :5173 (see README). Have `demo_gateway_audit` availab
 | 1:35 | Findings | Open one finding: evidence, NIST/RFC references, **MITRE ATT&CK** chips (T1557, T1600). "Downgrade pattern: strong proposal rejected, retry offered only weak suites." |
 | 1:55 | Anomaly model | Show group scores and **SHAP bars** on a behavioural-anomaly tunnel: "explanation computed from the fitted model, not canned." |
 | 2:15 | Back to results | Scroll to **Remediation plan**; click **Download PDF report**; mention JSON and syslog/CEF for the SOC. |
-| 2:35 | **Real capture** (optional) | Analyze `ikev1-bug-12620.pcapng` (green *real · public* badge): real aggressive-mode PSK flagged with T1110.002. |
+| 2:35 | **Real traffic** (optional) | Analyze `weak_des_md5_modp768` (green *real · strongSwan lab*) — real IKE/ESP from two strongSwan daemons, scored critical — or `ikev1-bug-12620.pcapng` (*real · public*): real aggressive-mode PSK flagged with T1110.002. |
 | 2:50 | **Evaluation** tab | "Numbers are on held-out simulated data and say so; the real-capture validation is 27/27 against Wireshark and Scapy oracles." Close on the limitations banner. |
 
 If asked about keys: "IKEv2 encrypts auth and child SAs. With keys we see ESP algorithms and PFS; without, the UI says *not assessable* rather than guessing." Try `ikev2-decrypt-aes256cbc.pcapng` for the no-keys message.

@@ -97,6 +97,9 @@ class RuleEngine:
         elif t.ike_version == 1 and t.create_child_exchanges:
             cov("COV-IKEV1-PHASE2", "IKEv1 Quick Mode not observable",
                 "Quick Mode is encrypted with phase-1 keys; ESP transforms and PFS were not assessed.")
+        if t.decrypted and t.child_sas and not any(c.via == "CREATE_CHILD_SA" for c in t.child_sas):
+            cov("COV-PFS-UNKNOWN", "PFS not assessable (no child SA rekey observed)",
+                "The initial child SA never carries a key exchange, so PFS can only be judged from a CREATE_CHILD_SA rekey; none appears in this capture.")
         if t.status == "established" and not t.child_sas and t.ike_version == 2 and t.decrypted:
             cov("COV-NO-CHILD", "No child SA found in decrypted IKE_AUTH", "IKE_AUTH decrypted but carried no ESP/AH proposal.")
         return out
@@ -141,17 +144,17 @@ def _suite_tier(t: Tunnel, eng: RuleEngine, params: dict, rule: dict) -> CheckRe
 
 @check("child_no_pfs")
 def _no_pfs(t: Tunnel, eng: RuleEngine, params: dict, rule: dict) -> CheckResult:
-    if not t.child_sas:
-        return []
-    initial = [c for c in t.child_sas if not c.rekey]
-    no_dh = [c for c in t.child_sas if not c.dh_offered and not c.pfs]
-    rekeys_no_ke = [c for c in t.child_sas if c.via == "CREATE_CHILD_SA" and not c.pfs]
-    if no_dh or rekeys_no_ke:
-        return [("", {
-            "child_sas": len(t.child_sas), "without_dh_transform": len(no_dh),
-            "rekeys_without_key_exchange": len(rekeys_no_ke), "initial_child_sas": len(initial),
-            "negotiated": [c.suite.label() for c in t.child_sas][:3],
-        })]
+    """PFS is judged from observed CREATE_CHILD_SA exchanges only.
+
+    The initial child SA (IKE_AUTH) is keyed from the IKE SA and never carries a KE payload, and real
+    implementations (strongSwan) omit the DH transform there even when PFS is configured -- so its absence
+    proves nothing. Only a rekey/new child *without* a KE payload is evidence of missing PFS.
+    """
+    rekeys = [c for c in t.child_sas if c.via == "CREATE_CHILD_SA"]
+    bad = [c for c in rekeys if not c.pfs]
+    if bad:
+        return [("", {"child_exchanges_observed": len(rekeys), "without_key_exchange": len(bad),
+                      "negotiated": [c.suite.label() for c in bad][:3]})]
     return []
 
 

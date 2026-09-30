@@ -1,0 +1,2 @@
+# IKEv2 SK keys parsed from strongSwan charon log (Wireshark format)
+c9d022afd5afd8f9,29d50837b08dcee5,5cc8c8f55b29819b207521628041a466ca61fc0042429ebe56b8e935426e58ad57befec5,3c2199ae15c1428e288ae3d17deaa39872b220bd57fd1104913c4089e824ed8389082cd0,"AES-GCM-256 with 16 octet ICV",,,"NONE [RFC4306]"

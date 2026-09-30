@@ -6967,7 +6967,6 @@
     "esp_datagrams": 214,
     "expect_rules": [
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-AGGR-PSK",
      "IKE-INTEG-WEAK",
      "IKE-V1-LEGACY"
@@ -7215,16 +7214,14 @@
    {
     "assessable_rules": [
      "ESP-ENC-WEAK",
-     "ESP-INTEG-WEAK",
-     "ESP-NO-PFS"
+     "ESP-INTEG-WEAK"
     ],
     "auth": "RSA",
     "aux_ispis": [],
     "esp_datagrams": 462,
     "expect_rules": [
      "ESP-ENC-WEAK",
-     "ESP-INTEG-WEAK",
-     "ESP-NO-PFS"
+     "ESP-INTEG-WEAK"
     ],
     "family": "w_esp_weak",
     "ike_datagrams": 9,
@@ -7912,7 +7909,6 @@
     "assessable_rules": [
      "ESP-ENC-WEAK",
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-DH-WEAK",
      "IKE-ENC-WEAK",
      "IKE-INTEG-WEAK"
@@ -7923,7 +7919,6 @@
     "expect_rules": [
      "ESP-ENC-WEAK",
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-DH-WEAK",
      "IKE-ENC-WEAK",
      "IKE-INTEG-WEAK"
@@ -7950,7 +7945,6 @@
     "assessable_rules": [
      "ESP-ENC-WEAK",
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-DH-WEAK",
      "IKE-ENC-WEAK",
      "IKE-INTEG-WEAK"
@@ -7961,7 +7955,6 @@
     "expect_rules": [
      "ESP-ENC-WEAK",
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-DH-WEAK",
      "IKE-ENC-WEAK",
      "IKE-INTEG-WEAK"
@@ -7988,7 +7981,6 @@
     "assessable_rules": [
      "ESP-ENC-WEAK",
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-DH-WEAK",
      "IKE-ENC-WEAK",
      "IKE-INTEG-WEAK"
@@ -7999,7 +7991,6 @@
     "expect_rules": [
      "ESP-ENC-WEAK",
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-DH-WEAK",
      "IKE-ENC-WEAK",
      "IKE-INTEG-WEAK"
@@ -8026,7 +8017,6 @@
     "assessable_rules": [
      "ESP-ENC-WEAK",
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-DH-WEAK",
      "IKE-ENC-WEAK",
      "IKE-INTEG-WEAK"
@@ -8037,7 +8027,6 @@
     "expect_rules": [
      "ESP-ENC-WEAK",
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-DH-WEAK",
      "IKE-ENC-WEAK",
      "IKE-INTEG-WEAK"
@@ -8070,7 +8059,6 @@
     "aux_ispis": [],
     "esp_datagrams": 58,
     "expect_rules": [
-     "ESP-NO-PFS",
      "IKE-AGGR-PSK",
      "IKE-LIFETIME-LONG",
      "IKE-V1-LEGACY"
@@ -8103,7 +8091,6 @@
     "aux_ispis": [],
     "esp_datagrams": 226,
     "expect_rules": [
-     "ESP-NO-PFS",
      "IKE-AGGR-PSK",
      "IKE-LIFETIME-LONG",
      "IKE-V1-LEGACY"
@@ -8136,7 +8123,6 @@
     "aux_ispis": [],
     "esp_datagrams": 190,
     "expect_rules": [
-     "ESP-NO-PFS",
      "IKE-AGGR-PSK",
      "IKE-LIFETIME-LONG",
      "IKE-V1-LEGACY"
@@ -8169,7 +8155,6 @@
     "aux_ispis": [],
     "esp_datagrams": 236,
     "expect_rules": [
-     "ESP-NO-PFS",
      "IKE-AGGR-PSK",
      "IKE-LIFETIME-LONG",
      "IKE-V1-LEGACY"
@@ -8202,7 +8187,6 @@
     "aux_ispis": [],
     "esp_datagrams": 212,
     "expect_rules": [
-     "ESP-NO-PFS",
      "IKE-AGGR-PSK",
      "IKE-LIFETIME-LONG",
      "IKE-V1-LEGACY"
@@ -8235,7 +8219,6 @@
     "aux_ispis": [],
     "esp_datagrams": 116,
     "expect_rules": [
-     "ESP-NO-PFS",
      "IKE-AGGR-PSK",
      "IKE-LIFETIME-LONG",
      "IKE-V1-LEGACY"
@@ -8437,7 +8420,6 @@
     "esp_datagrams": 206,
     "expect_rules": [
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-AGGR-PSK",
      "IKE-INTEG-WEAK",
      "IKE-V1-LEGACY"
@@ -8469,7 +8451,6 @@
     "aux_ispis": [],
     "esp_datagrams": 88,
     "expect_rules": [
-     "ESP-NO-PFS",
      "IKE-AGGR-PSK",
      "IKE-V1-LEGACY"
     ],
@@ -8503,7 +8484,6 @@
     "esp_datagrams": 174,
     "expect_rules": [
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-AGGR-PSK",
      "IKE-DH-WEAK",
      "IKE-INTEG-WEAK",
@@ -8541,7 +8521,6 @@
     "expect_rules": [
      "ESP-ENC-WEAK",
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-AGGR-PSK",
      "IKE-DH-WEAK",
      "IKE-ENC-WEAK",
@@ -8577,7 +8556,6 @@
     "esp_datagrams": 172,
     "expect_rules": [
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-AGGR-PSK",
      "IKE-INTEG-WEAK",
      "IKE-V1-LEGACY"
@@ -8611,7 +8589,6 @@
     "esp_datagrams": 258,
     "expect_rules": [
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-AGGR-PSK",
      "IKE-INTEG-WEAK",
      "IKE-V1-LEGACY"
@@ -8647,7 +8624,6 @@
     "expect_rules": [
      "ESP-ENC-WEAK",
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-DH-WEAK",
      "IKE-ENC-WEAK",
      "IKE-INTEG-WEAK",
@@ -8684,7 +8660,6 @@
     "expect_rules": [
      "ESP-ENC-WEAK",
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-DH-WEAK",
      "IKE-ENC-WEAK",
      "IKE-INTEG-WEAK",
@@ -8721,7 +8696,6 @@
     "expect_rules": [
      "ESP-ENC-WEAK",
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-DH-WEAK",
      "IKE-ENC-WEAK",
      "IKE-INTEG-WEAK",
@@ -8758,7 +8732,6 @@
     "expect_rules": [
      "ESP-ENC-WEAK",
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-DH-WEAK",
      "IKE-ENC-WEAK",
      "IKE-INTEG-WEAK",
@@ -8795,7 +8768,6 @@
     "expect_rules": [
      "ESP-ENC-WEAK",
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-DH-WEAK",
      "IKE-ENC-WEAK",
      "IKE-INTEG-WEAK",
@@ -8832,7 +8804,6 @@
     "expect_rules": [
      "ESP-ENC-WEAK",
      "ESP-INTEG-WEAK",
-     "ESP-NO-PFS",
      "IKE-DH-WEAK",
      "IKE-ENC-WEAK",
      "IKE-INTEG-WEAK",

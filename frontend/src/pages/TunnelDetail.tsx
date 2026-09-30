@@ -115,7 +115,7 @@ export default function TunnelDetail({ aid, tid }: { aid: number; tid: string })
           {t.child_sas.length === 0 ? <div className="small muted">None visible{t.ike_version === 2 && !t.decrypted ? " — IKE_AUTH is encrypted; upload the key file to reveal ESP algorithms and PFS." : "."}</div> : (
             <div className="tablewrap"><table><thead><tr><th>Proto</th><th>Suite</th><th>Via</th><th>PFS</th></tr></thead><tbody>
               {t.child_sas.map((c: Json, i: number) => (
-                <tr key={i}><td>{c.protocol}</td><td className="mono">{c.suite.label}</td><td>{c.via}{c.rekey ? " (rekey)" : ""}</td><td>{c.pfs || c.dh_offered ? "yes" : <b>no</b>}</td></tr>
+                <tr key={i}><td>{c.protocol}</td><td className="mono">{c.suite.label}</td><td>{c.via}{c.rekey ? " (rekey)" : ""}</td><td>{c.via === "CREATE_CHILD_SA" ? (c.pfs ? "yes" : <b>no</b>) : <span className="muted">n/a (initial)</span>}</td></tr>
               ))}</tbody></table></div>
           )}
         </div>

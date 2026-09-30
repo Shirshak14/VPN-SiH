@@ -130,6 +130,41 @@ def evaluate_synthetic(manifest_path: Path, model: AnomalyModel | None, use_keys
     }
 
 
+# ---------------------------------------------------------------------------------- real lab (strongSwan)
+def evaluate_lab(lab_dir: Path, model: AnomalyModel | None) -> dict[str, Any] | None:
+    """Real strongSwan traffic captured from the Docker lab; ground truth = the configs we wrote."""
+    mp = lab_dir / "manifest.json"
+    if not mp.exists():
+        return None
+    man = json.loads(mp.read_text())
+    engine = RuleEngine()
+    counts = {k: [0, 0, 0, 0] for k in ("combined", "rules", "ml")}
+    tp = fp = fn = 0
+    rows: list[dict[str, Any]] = []
+    for name, m in sorted(man.items()):
+        res = analyze(lab_dir / m["file"], lab_dir / m["keys"] if m.get("keys") else None, engine, model)
+        est = [r for r in res.tunnels if r.tunnel.chosen is not None and r.tunnel.status == "established"]
+        if not est:
+            rows.append({"capture": name, "error": "no established tunnel"})
+            continue
+        r = est[-1]
+        got = {f.rule_id for f in r.findings if f.category == "violation"}
+        want = set(m["expect_rules"])
+        if m["ike_version"] == 1:  # IKEv1 Quick Mode is encrypted: ESP rules unobservable
+            want -= {"ESP-ENC-WEAK", "ESP-INTEG-WEAK", "ESP-NO-PFS"}
+        tp += len(got & want)
+        fp += len(got - want)
+        fn += len(want - got)
+        positive = m["label"] != "benign"
+        rules_alert = r.risk.rules_component * 100 >= ALERT_RISK
+        ml_alert = bool(r.anomaly and r.anomaly["is_anomalous"])
+        for k, a in {"combined": rules_alert or ml_alert, "rules": rules_alert, "ml": ml_alert}.items():
+            counts[k][(0 if a else 2) if positive else (1 if a else 3)] += 1
+        rows.append({"capture": name, "label": m["label"], "risk": r.risk.score, "anomaly": r.anomaly["score"] if r.anomaly else None,
+                     "extra_rules": sorted(got - want), "missing_rules": sorted(want - got)})
+    return {"captures": len(man), "rule_level": _prf(tp, fp, fn, 0), "detection": {k: _prf(*v) for k, v in counts.items()}, "rows": rows}
+
+
 # ---------------------------------------------------------------------------------- real public
 def validate_public(public_dir: Path) -> dict[str, Any]:
     """Check the parser against independent oracles on real third-party captures."""
@@ -227,6 +262,7 @@ def run(manifest_path: Path, public_dir: Path, model_path: Path) -> dict[str, An
         "synthetic": evaluate_synthetic(manifest_path, model, use_keys=True),
         "synthetic_no_keys": evaluate_synthetic(manifest_path, model, use_keys=False),
         "real_public": validate_public(public_dir),
+        "real_lab": evaluate_lab(manifest_path.parent / "lab", model),
         "throughput": measure_throughput(manifest_path),
         "anomaly_model": model.meta.to_dict() | {"trained_on": f"{len(model.meta.trained_on)} benign tunnels"},
     }

@@ -1,0 +1,11 @@
+.venv
+.git
+**/node_modules
+**/__pycache__
+frontend/dist
+data/captures/synthetic
+data/_lab_tmp
+data/uploads
+data/*.db
+data/*.log
+backend/models

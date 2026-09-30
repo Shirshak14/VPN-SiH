@@ -110,13 +110,13 @@ rules:
     remediation: REM-STRONG-INTEG
 
   - id: ESP-NO-PFS
-    title: Child SA without Perfect Forward Secrecy
+    title: Child SA rekey without Perfect Forward Secrecy
     check: child_no_pfs
     params: {}
     severity_by_tier: {}
     severity: medium
     description: >-
-      No Diffie-Hellman exchange protects the child SA keys, so compromise of the IKE SA keys
+      A CREATE_CHILD_SA exchange (IKEv2 rekey / new child) carried no key-exchange payload, so compromise of the IKE SA keys
       (or of the PSK in IKEv1) exposes all traffic ever protected by derived child SAs.
     refs: ["NIST SP 800-77r1", "RFC 7296 (CREATE_CHILD_SA with KE)"]
     mitre: [T1040]

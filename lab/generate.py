@@ -17,10 +17,11 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(ROOT_BACKEND := Path(__file__).resolve().parent.parent / "backend"))
 from scenarios import SCENARIOS, Scenario  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "data" / "captures"
+OUT = ROOT / "data" / "captures" / "lab"
 IMAGE = "ipsec-lab:latest"
 NET = "ipsec-labnet"
 SUBNET = "10.99.0"
@@ -38,7 +39,7 @@ def sh(*args: str, check: bool = True, timeout: int = 120) -> subprocess.Complet
 def swanctl_conf(sc: Scenario, role: str, ike: str, esp: str) -> str:
     init = role == "init"
     local, remote = (INIT_IP, RESP_IP) if init else (RESP_IP, INIT_IP)
-    lid, rid = ("init", "resp") if init else ("resp", "init")
+    lid, rid = ("@init", "@resp") if init else ("@resp", "@init")  # "@" = literal FQDN identity, required for IKEv1 aggressive PSK lookup
     lts, rts = ("10.1.0.0/24", "10.2.0.0/24") if init else ("10.2.0.0/24", "10.1.0.0/24")
     rekey = f"rekey_time = {sc.rekey_time}" if sc.rekey_time != "0s" else ""
     crekey = f"rekey_time = {sc.child_rekey_time}" if sc.child_rekey_time != "0s" else "rekey_time = 0s"
@@ -69,8 +70,8 @@ def swanctl_conf(sc: Scenario, role: str, ike: str, esp: str) -> str:
           }}
         }}
         secrets {{
-          ike-lab {{ id-a = init
-                     id-b = resp
+          ike-lab {{ id-a = @init
+                     id-b = @resp
                      secret = "{PSK}" }}
         }}
         """)
@@ -137,10 +138,51 @@ def run(sc: Scenario, tmp: Path) -> dict:
         sh("docker", "cp", f"{ini}:/cap.pcap", str(OUT / f"{sc.name}.pcap"))
         log = sh("docker", "exec", ini, "cat", "/var/log/charon.log", check=False).stdout
         (tmp / f"{sc.name}.charon.log").write_text(log)
-        return {"handshake_ok": ok}
+        (tmp / f"{sc.name}.resp.charon.log").write_text(sh("docker", "exec", rsp, "cat", "/var/log/charon.log", check=False).stdout)
+        has_keys = ok and sc.ike_version == 2 and export_keys(OUT / f"{sc.name}.pcap", log, OUT / f"{sc.name}.keys")
+        return {"handshake_ok": ok, "keys": bool(has_keys)}
     finally:
         for c in (ini, rsp):
             sh("docker", "rm", "-f", c, check=False)
+
+
+def _hexblocks(log: str) -> dict[str, bytes]:
+    """Parse charon's verbose hexdumps ("Sk_ei secret => N bytes" + '  off: hex ...' lines)."""
+    import re
+    out: dict[str, bytes] = {}
+    lines = log.splitlines()
+    for i, ln in enumerate(lines):
+        m = re.search(r"\[IKE\] (Sk_[a-z]{2}) secret => (\d+) bytes", ln)
+        if not m:
+            continue
+        data = b""
+        for nxt in lines[i + 1:]:
+            h = re.match(r"\d+\[IKE\]\s+\d+: ((?:[0-9A-F]{2} ){1,16})", nxt)
+            if not h:
+                break
+            data += bytes.fromhex(h.group(1).replace(" ", ""))
+        out.setdefault(m.group(1), data[: int(m.group(2))])
+    return out
+
+
+def export_keys(pcap: Path, log: str, dest: Path) -> bool:
+    """Write a Wireshark ikev2_decryption_table for the (single) IKE SA in `pcap`, using keys from charon's log."""
+    from ipsec_analyzer.parser import parse_pcap
+    from ipsec_analyzer.sa import reconstruct
+    blocks = _hexblocks(log)
+    tun = next((t for t in reconstruct(parse_pcap(pcap)).tunnels if t.ike_version == 2 and t.chosen and t.rspi != "0" * 16), None)
+    if tun is None or "Sk_ei" not in blocks or tun.chosen is None:
+        return False
+    c = tun.chosen
+    enc = {"AES_CBC": f"AES-CBC-{c.encr_bits}", "AES_GCM_16": f"AES-GCM-{c.encr_bits} with 16 octet ICV",
+           "3DES": "3DES", "DES": "DES"}.get(c.encr or "")
+    if enc is None:
+        return False
+    integ = f"{c.integ} [RFC4868]" if c.integ else "NONE [RFC4306]"
+    row = ",".join([tun.ispi, tun.rspi, blocks["Sk_ei"].hex(), blocks["Sk_er"].hex(), f'"{enc}"',
+                    blocks.get("Sk_ai", b"").hex(), blocks.get("Sk_ar", b"").hex(), f'"{integ}"'])
+    dest.write_text("# IKEv2 SK keys parsed from strongSwan charon log (Wireshark format)\n" + row + "\n")
+    return True
 
 
 def _secs(s: str) -> int:
@@ -175,6 +217,8 @@ def main() -> None:
             "offered_esp": sc.init_esp,
             "expect_rules": sc.expect_rules,
             "handshake_ok": res["handshake_ok"],
+            "keys": f"{sc.name}.keys" if res["keys"] else None,
+            "split": "lab",
         }
         print(f"[lab]   handshake_ok={res['handshake_ok']}", flush=True)
         manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True))

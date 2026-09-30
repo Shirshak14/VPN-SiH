@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-09-30T16:44:09+00:00",
+ "generated_at": "2026-09-30T17:37:46+00:00",
  "alert_threshold_risk": 15.0,
  "corpus": {
   "captures": 309,
@@ -187,7 +187,7 @@
    }
   },
   "rule_level": {
-   "tp": 287,
+   "tp": 282,
    "fp": 0,
    "fn": 0,
    "tn": 0,
@@ -207,7 +207,7 @@
      "fn": 0
     },
     "ESP-NO-PFS": {
-     "tp": 14,
+     "tp": 9,
      "fp": 0,
      "fn": 0
     },
@@ -584,11 +584,11 @@
   "rule_level": {
    "tp": 208,
    "fp": 0,
-   "fn": 79,
+   "fn": 74,
    "tn": 0,
    "precision": 1.0,
-   "recall": 0.7247386759581882,
-   "f1": 0.8404040404040405,
+   "recall": 0.7375886524822695,
+   "f1": 0.8489795918367347,
    "false_positive_rate": null,
    "per_rule": {
     "ESP-ENC-WEAK": {
@@ -604,7 +604,7 @@
     "ESP-NO-PFS": {
      "tp": 0,
      "fp": 0,
-     "fn": 14
+     "fn": 9
     },
     "ESP-SEQ-GAPS": {
      "tp": 5,
@@ -1032,13 +1032,244 @@
   "total_ok": 27,
   "total": 27
  },
+ "real_lab": {
+  "captures": 23,
+  "rule_level": {
+   "tp": 41,
+   "fp": 0,
+   "fn": 0,
+   "tn": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0,
+   "false_positive_rate": null
+  },
+  "detection": {
+   "combined": {
+    "tp": 10,
+    "fp": 0,
+    "fn": 0,
+    "tn": 13,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "false_positive_rate": 0.0
+   },
+   "rules": {
+    "tp": 10,
+    "fp": 0,
+    "fn": 0,
+    "tn": 13,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "false_positive_rate": 0.0
+   },
+   "ml": {
+    "tp": 0,
+    "fp": 0,
+    "fn": 10,
+    "tn": 13,
+    "precision": null,
+    "recall": 0.0,
+    "f1": null,
+    "false_positive_rate": 0.0
+   }
+  },
+  "rows": [
+   {
+    "capture": "downgrade_dh_only",
+    "label": "downgrade",
+    "risk": 77.3,
+    "anomaly": 0.4227,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "downgrade_offer_strong_chosen_weak",
+    "label": "downgrade",
+    "risk": 91.5,
+    "anomaly": 0.4227,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "downgrade_retry_after_reject",
+    "label": "downgrade",
+    "risk": 91.2,
+    "anomaly": 0.3024,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "ok_aes128_sha256_curve25519",
+    "label": "benign",
+    "risk": 8.3,
+    "anomaly": 0.2764,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "ok_aes128_sha256_modp2048",
+    "label": "benign",
+    "risk": 5.9,
+    "anomaly": 0.1976,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "ok_aes128gcm_ecp256",
+    "label": "benign",
+    "risk": 8.3,
+    "anomaly": 0.2764,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "ok_aes192_sha384_ecp384",
+    "label": "benign",
+    "risk": 8.3,
+    "anomaly": 0.2764,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "ok_aes256_sha256_ecp256_b",
+    "label": "benign",
+    "risk": 8.3,
+    "anomaly": 0.2764,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "ok_aes256_sha256_modp2048",
+    "label": "benign",
+    "risk": 8.3,
+    "anomaly": 0.2764,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "ok_aes256_sha384_ecp521",
+    "label": "benign",
+    "risk": 9.0,
+    "anomaly": 0.3014,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "ok_aes256_sha384_modp3072",
+    "label": "benign",
+    "risk": 6.0,
+    "anomaly": 0.1993,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "ok_aes256_sha512_modp4096",
+    "label": "benign",
+    "risk": 8.6,
+    "anomaly": 0.2862,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "ok_aes256gcm_curve25519",
+    "label": "benign",
+    "risk": 8.3,
+    "anomaly": 0.2764,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "ok_aes256gcm_ecp384",
+    "label": "benign",
+    "risk": 4.9,
+    "anomaly": 0.1639,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "ok_aes256gcm_modp3072",
+    "label": "benign",
+    "risk": 8.3,
+    "anomaly": 0.2764,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "weak_3des_sha1_modp1024",
+    "label": "weak-config",
+    "risk": 86.4,
+    "anomaly": 0.3024,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "weak_3des_sha1_modp2048",
+    "label": "weak-config",
+    "risk": 65.5,
+    "anomaly": 0.2551,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "weak_aes128_md5_modp1024",
+    "label": "weak-config",
+    "risk": 84.6,
+    "anomaly": 0.2992,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "weak_des_md5_modp768",
+    "label": "weak-config",
+    "risk": 97.5,
+    "anomaly": 0.2764,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "weak_ikev1_aggressive_psk",
+    "label": "weak-config",
+    "risk": 79.3,
+    "anomaly": 0.334,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "weak_ikev1_main_3des_modp1024",
+    "label": "weak-config",
+    "risk": 79.3,
+    "anomaly": 0.334,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "weak_ikev1_main_aes_modp2048",
+    "label": "benign",
+    "risk": 15.4,
+    "anomaly": 0.334,
+    "extra_rules": [],
+    "missing_rules": []
+   },
+   {
+    "capture": "weak_no_pfs",
+    "label": "weak-config",
+    "risk": 24.8,
+    "anomaly": 0.2764,
+    "extra_rules": [],
+    "missing_rules": []
+   }
+  ]
+ },
  "throughput": {
   "captures": 309,
   "packets": 88433,
   "megabytes": 48.44,
-  "parse_packets_per_s": 97626,
-  "parse_mb_per_s": 53.47,
-  "end_to_end_packets_per_s": 69770,
+  "parse_packets_per_s": 99924,
+  "parse_mb_per_s": 54.73,
+  "end_to_end_packets_per_s": 73316,
   "largest_capture": "demo_gateway_audit"
  },
  "anomaly_model": {

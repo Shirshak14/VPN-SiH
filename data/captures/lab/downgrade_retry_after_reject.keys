@@ -1,0 +1,2 @@
+# IKEv2 SK keys parsed from strongSwan charon log (Wireshark format)
+4990bb4e753e3e14,42c3661724f5a9c9,500c6bfe582719573ce50bdb0122b21007b881b3bd6273db,10fa917b1c89342a18b2cabe7c910ddd5c39397dca479daa,"3DES",ec33f6d661605484007f46295c9856a257bffe4c,d1dabe9ff6baadabc8e45f1c0efdd9a5b889b52f,"HMAC_SHA1_96 [RFC4868]"
