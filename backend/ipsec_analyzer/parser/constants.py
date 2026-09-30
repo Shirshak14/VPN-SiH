@@ -1,0 +1,160 @@
+"""IANA registry values used by the IKE/ESP/AH decoder.
+
+Sources: RFC 7296 (IKEv2), RFC 2408/2409 + RFC 2407 (IKEv1 / IPsec DOI), RFC 8247 & IANA
+"Internet Key Exchange Version 2 (IKEv2) Parameters", IANA "IPsec Registry".
+"""
+from __future__ import annotations
+
+# --- IKE exchange types -----------------------------------------------------
+V1_EXCHANGE = {
+    2: "Identity Protection (Main Mode)",
+    4: "Aggressive Mode",
+    5: "Informational",
+    32: "Quick Mode",
+    33: "New Group Mode",
+}
+V2_EXCHANGE = {
+    34: "IKE_SA_INIT",
+    35: "IKE_AUTH",
+    36: "CREATE_CHILD_SA",
+    37: "INFORMATIONAL",
+    38: "IKE_SESSION_RESUME",
+    39: "GSA_AUTH",
+    40: "GSA_REGISTRATION",
+    41: "GSA_REKEY",
+    43: "IKE_INTERMEDIATE",
+}
+V1_MAIN, V1_AGGRESSIVE, V1_INFO, V1_QUICK = 2, 4, 5, 32
+V2_SA_INIT, V2_AUTH, V2_CREATE_CHILD, V2_INFO = 34, 35, 36, 37
+
+# --- Payload types ----------------------------------------------------------
+PAYLOAD_NONE = 0
+V1_PAYLOAD = {
+    1: "SA", 2: "Proposal", 3: "Transform", 4: "KE", 5: "ID", 6: "CERT", 7: "CERTREQ",
+    8: "HASH", 9: "SIG", 10: "NONCE", 11: "NOTIFY", 12: "DELETE", 13: "VID",
+    20: "NAT-D", 21: "NAT-OA", 130: "NAT-D (draft)", 131: "NAT-OA (draft)", 132: "FRAGMENT",
+}
+V2_PAYLOAD = {
+    33: "SA", 34: "KE", 35: "IDi", 36: "IDr", 37: "CERT", 38: "CERTREQ", 39: "AUTH",
+    40: "Ni/Nr", 41: "N", 42: "D", 43: "V", 44: "TSi", 45: "TSr", 46: "SK", 47: "CP",
+    48: "EAP", 53: "SKF",
+}
+V1_SA, V1_KE, V1_ID, V1_HASH, V1_NONCE, V1_NOTIFY, V1_VID = 1, 4, 5, 8, 10, 11, 13
+V1_NATD = (20, 130)
+V1_FRAG = 132
+V2_SA, V2_KE, V2_IDI, V2_IDR, V2_AUTH_P, V2_NONCE, V2_NOTIFY = 33, 34, 35, 36, 39, 40, 41
+V2_TSI, V2_TSR, V2_SK, V2_SKF = 44, 45, 46, 53
+
+# --- IKEv2 transform types & IDs (RFC 7296 3.3.2, IANA) ---------------------
+T_ENCR, T_PRF, T_INTEG, T_DH, T_ESN = 1, 2, 3, 4, 5
+TRANSFORM_TYPE = {1: "ENCR", 2: "PRF", 3: "INTEG", 4: "DH", 5: "ESN"}
+
+ENCR = {
+    1: "DES_IV64", 2: "DES", 3: "3DES", 4: "RC5", 5: "IDEA", 6: "CAST", 7: "BLOWFISH",
+    8: "3IDEA", 9: "DES_IV32", 11: "NULL", 12: "AES_CBC", 13: "AES_CTR",
+    14: "AES_CCM_8", 15: "AES_CCM_12", 16: "AES_CCM_16", 18: "AES_GCM_8",
+    19: "AES_GCM_12", 20: "AES_GCM_16", 22: "NULL_AUTH_AES_GMAC", 23: "CAMELLIA_CBC",
+    24: "CAMELLIA_CTR", 25: "CAMELLIA_CCM_8", 26: "CAMELLIA_CCM_12", 27: "CAMELLIA_CCM_16",
+    28: "CHACHA20_POLY1305",
+}
+AEAD_ENCR = {14, 15, 16, 18, 19, 20, 25, 26, 27, 28}
+PRF = {
+    1: "HMAC_MD5", 2: "HMAC_SHA1", 3: "HMAC_TIGER", 4: "AES128_XCBC", 5: "HMAC_SHA2_256",
+    6: "HMAC_SHA2_384", 7: "HMAC_SHA2_512", 8: "AES128_CMAC",
+}
+INTEG = {
+    0: "NONE", 1: "HMAC_MD5_96", 2: "HMAC_SHA1_96", 3: "DES_MAC", 4: "KPDK_MD5",
+    5: "AES_XCBC_96", 6: "HMAC_MD5_128", 7: "HMAC_SHA1_160", 8: "AES_CMAC_96",
+    9: "AES_128_GMAC", 10: "AES_192_GMAC", 11: "AES_256_GMAC", 12: "HMAC_SHA2_256_128",
+    13: "HMAC_SHA2_384_192", 14: "HMAC_SHA2_512_256",
+}
+DH_GROUP = {
+    0: "NONE", 1: "MODP_768", 2: "MODP_1024", 5: "MODP_1536", 14: "MODP_2048",
+    15: "MODP_3072", 16: "MODP_4096", 17: "MODP_6144", 18: "MODP_8192", 19: "ECP_256",
+    20: "ECP_384", 21: "ECP_521", 22: "MODP_1024_160", 23: "MODP_2048_224",
+    24: "MODP_2048_256", 25: "ECP_192", 26: "ECP_224", 27: "BRAINPOOL_P224",
+    28: "BRAINPOOL_P256", 29: "BRAINPOOL_P384", 30: "BRAINPOOL_P512", 31: "CURVE_25519",
+    32: "CURVE_448",
+}
+ESN = {0: "NO_ESN", 1: "ESN"}
+
+PROTO_IKE, PROTO_AH, PROTO_ESP = 1, 2, 3
+PROTO_NAME = {1: "IKE", 2: "AH", 3: "ESP"}
+
+# IKEv2 AUTH payload "Auth Method"
+V2_AUTH_METHOD = {
+    1: "RSA Digital Signature", 2: "Shared Key Message Integrity Code", 3: "DSS Digital Signature",
+    9: "ECDSA-256", 10: "ECDSA-384", 11: "ECDSA-521", 12: "Generic Digital Signature (RFC 7427)",
+    13: "NULL Authentication", 14: "Secure Password Framework",
+}
+
+# IKEv2 notify message types of interest (RFC 7296 3.10.1 + extensions)
+NOTIFY_V2 = {
+    1: "UNSUPPORTED_CRITICAL_PAYLOAD", 4: "INVALID_IKE_SPI", 5: "INVALID_MAJOR_VERSION",
+    7: "INVALID_SYNTAX", 9: "INVALID_MESSAGE_ID", 11: "INVALID_SPI", 14: "NO_PROPOSAL_CHOSEN",
+    17: "INVALID_KE_PAYLOAD", 24: "AUTHENTICATION_FAILED", 34: "SINGLE_PAIR_REQUIRED",
+    35: "NO_ADDITIONAL_SAS", 36: "INTERNAL_ADDRESS_FAILURE", 37: "FAILED_CP_REQUIRED",
+    38: "TS_UNACCEPTABLE", 39: "INVALID_SELECTORS", 43: "TEMPORARY_FAILURE",
+    44: "CHILD_SA_NOT_FOUND", 16384: "INITIAL_CONTACT", 16385: "SET_WINDOW_SIZE",
+    16386: "ADDITIONAL_TS_POSSIBLE", 16387: "IPCOMP_SUPPORTED", 16388: "NAT_DETECTION_SOURCE_IP",
+    16389: "NAT_DETECTION_DESTINATION_IP", 16390: "COOKIE", 16391: "USE_TRANSPORT_MODE",
+    16392: "HTTP_CERT_LOOKUP_SUPPORTED", 16393: "REKEY_SA", 16394: "ESP_TFC_PADDING_NOT_SUPPORTED",
+    16395: "NON_FIRST_FRAGMENTS_ALSO", 16396: "MOBIKE_SUPPORTED", 16407: "REDIRECT_SUPPORTED",
+    16430: "IKEV2_FRAGMENTATION_SUPPORTED", 16431: "SIGNATURE_HASH_ALGORITHMS",
+}
+N_NO_PROPOSAL_CHOSEN, N_INVALID_KE = 14, 17
+N_NAT_SRC, N_NAT_DST, N_COOKIE, N_REKEY_SA, N_FRAG_SUPPORTED = 16388, 16389, 16390, 16393, 16430
+N_USE_TRANSPORT = 16391
+
+# IKEv1 ISAKMP notify types (RFC 2408 3.14.1 / RFC 2407 4.6.3)
+NOTIFY_V1 = {
+    1: "INVALID-PAYLOAD-TYPE", 2: "DOI-NOT-SUPPORTED", 3: "SITUATION-NOT-SUPPORTED",
+    4: "INVALID-COOKIE", 5: "INVALID-MAJOR-VERSION", 6: "INVALID-MINOR-VERSION",
+    7: "INVALID-EXCHANGE-TYPE", 8: "INVALID-FLAGS", 9: "INVALID-MESSAGE-ID",
+    10: "INVALID-PROTOCOL-ID", 11: "INVALID-SPI", 12: "INVALID-TRANSFORM-ID",
+    13: "ATTRIBUTES-NOT-SUPPORTED", 14: "NO-PROPOSAL-CHOSEN", 15: "BAD-PROPOSAL-SYNTAX",
+    16: "PAYLOAD-MALFORMED", 17: "INVALID-KEY-INFORMATION", 18: "INVALID-ID-INFORMATION",
+    19: "INVALID-CERT-ENCODING", 20: "INVALID-CERTIFICATE", 21: "CERT-TYPE-UNSUPPORTED",
+    22: "INVALID-CERT-AUTHORITY", 23: "INVALID-HASH-INFORMATION", 24: "AUTHENTICATION-FAILED",
+    25: "INVALID-SIGNATURE", 26: "ADDRESS-NOTIFICATION", 27: "NOTIFY-SA-LIFETIME",
+    28: "CERTIFICATE-UNAVAILABLE", 29: "UNSUPPORTED-EXCHANGE-TYPE", 30: "UNEQUAL-PAYLOAD-LENGTHS",
+    24576: "RESPONDER-LIFETIME", 24577: "REPLAY-STATUS", 24578: "INITIAL-CONTACT",
+    36136: "R-U-THERE", 36137: "R-U-THERE-ACK",
+}
+N1_NO_PROPOSAL_CHOSEN = 14
+N1_DPD, N1_DPD_ACK = 36136, 36137
+
+# --- IKEv1 Phase 1 (ISAKMP SA) transform attributes -------------------------
+A1_ENC, A1_HASH, A1_AUTH, A1_GROUP, A1_GROUP_TYPE = 1, 2, 3, 4, 5
+A1_LIFE_TYPE, A1_LIFE_DUR, A1_PRF, A1_KEYLEN = 11, 12, 13, 14
+V1_ENC = {1: "DES_CBC", 2: "IDEA_CBC", 3: "BLOWFISH_CBC", 4: "RC5_CBC", 5: "3DES_CBC",
+          6: "CAST_CBC", 7: "AES_CBC", 8: "CAMELLIA_CBC"}
+V1_HASH = {1: "MD5", 2: "SHA1", 3: "TIGER", 4: "SHA2_256", 5: "SHA2_384", 6: "SHA2_512"}
+V1_AUTH = {1: "PSK", 2: "DSS_SIG", 3: "RSA_SIG", 4: "RSA_ENC", 5: "RSA_ENC_REVISED",
+           64221: "HYBRID_RSA", 65001: "XAUTH_PSK", 65003: "XAUTH_RSA", 65005: "XAUTH_INIT_RSA",
+           65007: "XAUTH_RESP_RSA"}
+V1_AUTH_PSK_LIKE = {1, 65001}
+# IKEv1 "Group Description" attribute values share the IKEv2 DH registry (see DH_GROUP).
+
+# --- IKEv1 Phase 2 (IPsec DOI) attributes -----------------------------------
+A2_LIFE_TYPE, A2_LIFE_DUR, A2_GROUP, A2_ENCAP, A2_AUTH, A2_KEYLEN = 1, 2, 3, 4, 5, 6
+V1_IPSEC_AUTH = {1: "HMAC_MD5", 2: "HMAC_SHA1", 3: "DES_MAC", 4: "KPDK", 5: "HMAC_SHA2_256",
+                 6: "HMAC_SHA2_384", 7: "HMAC_SHA2_512"}
+V1_ESP_TRANSFORM = {1: "DES_IV64", 2: "DES", 3: "3DES", 4: "RC5", 5: "IDEA", 6: "CAST", 7: "BLOWFISH",
+                    8: "3IDEA", 9: "DES_IV32", 10: "RC4", 11: "NULL", 12: "AES_CBC"}
+V1_ENCAP_MODE = {1: "Tunnel", 2: "Transport", 3: "UDP-Encap Tunnel", 4: "UDP-Encap Transport"}
+
+# --- Vendor IDs we recognise (IKEv1 capability signalling) ------------------
+VENDOR_IDS = {
+    bytes.fromhex("4a131c81070358455c5728f20e95452f"): "NAT-T RFC 3947",
+    bytes.fromhex("afcad71368a1f1c96b8696fc77570100"): "DPD RFC 3706",
+    bytes.fromhex("09002689dfd6b712"): "XAUTH",
+    bytes.fromhex("4048b7d56ebce88525e7de7f00d6c2d3"): "IKE Fragmentation",
+    bytes.fromhex("90cb80913ebb696e086381b5ec427b1f"): "NAT-T draft-02",
+}
+
+# --- IKE header flags -------------------------------------------------------
+V2_FLAG_INITIATOR, V2_FLAG_VERSION, V2_FLAG_RESPONSE = 0x08, 0x10, 0x20
+V1_FLAG_ENCRYPT, V1_FLAG_COMMIT = 0x01, 0x02
+
+IKE_PORT, NATT_PORT = 500, 4500
