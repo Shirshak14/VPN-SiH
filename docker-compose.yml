@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: analyzer, POSTGRES_PASSWORD: analyzer, POSTGRES_DB: analyzer }
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U analyzer"], interval: 3s, retries: 20 }
+  api:
+    build: { context: ., dockerfile: backend/Dockerfile }
+    environment: { DATABASE_URL: "postgresql+psycopg2://analyzer:analyzer@db:5432/analyzer" }
+    depends_on: { db: { condition: service_healthy } }
+  web:
+    build: { context: ., dockerfile: frontend/Dockerfile }
+    ports: ["8080:80"]
+    depends_on: [api]
+volumes:
+  pgdata:

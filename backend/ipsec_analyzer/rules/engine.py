@@ -49,10 +49,14 @@ class RuleEngine:
     def evaluate(self, t: Tunnel) -> list[Finding]:
         out: list[Finding] = []
         for rule in self.policy.rules:
-            for key, evidence in _CHECKS[rule["check"]](t, self, rule.get("params", {}), rule):
-                sev = rule.get("severity_by_tier", {}).get(key) or rule.get("severity")
-                if sev is None:
-                    continue
+            hits = _CHECKS[rule["check"]](t, self, rule.get("params", {}), rule)
+            if not hits:
+                continue
+            key, evidence = hits[0]
+            if len(hits) > 1:  # one finding per rule per tunnel; keep every instance as evidence
+                evidence = {**evidence, "instances": [e for _k, e in hits]}
+            sev = rule.get("severity_by_tier", {}).get(key) or rule.get("severity")
+            if sev is not None:
                 out.append(self._finding(rule, t, sev, "violation", evidence))
         out.extend(self._coverage(t))
         order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}

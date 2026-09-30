@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .parser import ParsedCapture, parse_pcap
 from .parser.decrypt import load_key_table
@@ -34,12 +34,16 @@ class AnalysisResult:
 
 
 def analyze(pcap: str | Path, keys: str | Path | None = None, engine: RuleEngine | None = None,
-            anomaly_model: Any | None = None) -> AnalysisResult:
+            anomaly_model: Any | None = None, progress: Callable[[str], None] | None = None) -> AnalysisResult:
     t0 = time.perf_counter()
+    step = progress or (lambda _s: None)
+    step("parsing IKE/ESP")
     engine = engine or RuleEngine()
     key_rows = load_key_table(keys) if keys else None
     cap = parse_pcap(pcap, keys=key_rows)
+    step("reconstructing SAs")
     rec = reconstruct(cap)
+    step("rules + anomaly model")
     results: list[TunnelResult] = []
     for t in rec.tunnels:
         findings = engine.evaluate(t)

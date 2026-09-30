@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-09-30T16:31:12+00:00",
+ "generated_at": "2026-09-30T16:44:09+00:00",
  "alert_threshold_risk": 15.0,
  "corpus": {
   "captures": 309,
@@ -1036,9 +1036,9 @@
   "captures": 309,
   "packets": 88433,
   "megabytes": 48.44,
-  "parse_packets_per_s": 67475,
-  "parse_mb_per_s": 36.96,
-  "end_to_end_packets_per_s": 47229,
+  "parse_packets_per_s": 97626,
+  "parse_mb_per_s": 53.47,
+  "end_to_end_packets_per_s": 69770,
   "largest_capture": "demo_gateway_audit"
  },
  "anomaly_model": {
