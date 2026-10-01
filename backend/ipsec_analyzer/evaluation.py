@@ -19,9 +19,11 @@ from typing import Any
 
 from .ml.model import DEFAULT_MODEL, AnomalyModel
 from .parser import parse_pcap
+from .parser.constants import V2_ENCR_TO_V1, V2_INTEG_TO_V1
 from .parser.decrypt import load_key_table
 from .pipeline import analyze
 from .rules import RuleEngine
+from .rules.policy import V1_UNOBSERVABLE_RULES
 
 ALERT_RISK = 15.0  # rules-only risk at/above the policy's "medium" band (i.e. at least one medium finding)
 
@@ -34,16 +36,21 @@ def _prf(tp: int, fp: int, fn: int, tn: int) -> dict[str, Any]:
     return {"tp": tp, "fp": fp, "fn": fn, "tn": tn, "precision": p, "recall": r, "f1": f1, "false_positive_rate": fpr}
 
 
+def _tally(counts: dict[str, list[int]], positive: bool, r: Any) -> dict[str, bool]:
+    """Bin one tunnel into the tp/fp/fn/tn cells of each detector; returns which detectors alerted."""
+    rules_alert = r.risk.rules_component * 100 >= ALERT_RISK
+    ml_alert = bool(r.anomaly and r.anomaly["is_anomalous"])
+    alert = {"combined": rules_alert or ml_alert, "rules": rules_alert, "ml": ml_alert}
+    for k, a in alert.items():
+        counts[k][(0 if a else 2) if positive else (1 if a else 3)] += 1
+    return alert
+
+
 # ---------------------------------------------------------------------------------- synthetic
-_V1_ENC = {"AES_CBC": "AES_CBC", "3DES": "3DES_CBC", "DES": "DES_CBC"}
-_V1_HASH = {"HMAC_MD5_96": "MD5", "HMAC_SHA1_96": "SHA1", "HMAC_SHA2_256_128": "SHA2_256",
-            "HMAC_SHA2_384_192": "SHA2_384", "HMAC_SHA2_512_256": "SHA2_512"}
-
-
 def _v1_label(spec_label: str) -> str:
     enc, integ, dh = spec_label.split("/")
     e, _, bits = enc.partition("-")
-    return "/".join([_V1_ENC[e] + (f"-{bits}" if bits else ""), _V1_HASH[integ], dh])
+    return "/".join([V2_ENCR_TO_V1[e] + (f"-{bits}" if bits else ""), V2_INTEG_TO_V1[integ], dh])
 
 
 def evaluate_synthetic(manifest_path: Path, model: AnomalyModel | None, use_keys: bool = True) -> dict[str, Any]:
@@ -89,12 +96,8 @@ def evaluate_synthetic(manifest_path: Path, model: AnomalyModel | None, use_keys
                 chk("child_sa_suite", bool(t.child_sas) and t.child_sas[0].suite.label() == tr["negotiated_esp"])
             # detection
             positive = tr["label"] != "benign"
-            rules_alert = r.risk.rules_component * 100 >= ALERT_RISK
-            ml_alert = bool(r.anomaly and r.anomaly["is_anomalous"])
-            alert = {"combined": rules_alert or ml_alert, "rules": rules_alert, "ml": ml_alert}
-            for k, a in alert.items():
-                i = (0 if a else 2) if positive else (1 if a else 3)
-                counts[k][i] += 1
+            alert = _tally(counts, positive, r)
+            rules_alert, ml_alert = alert["rules"], alert["ml"]
             f = fam[tr["family"]]
             f["n"] += 1
             f["combined"] += alert["combined"]
@@ -151,15 +154,12 @@ def evaluate_lab(lab_dir: Path, model: AnomalyModel | None) -> dict[str, Any] | 
         got = {f.rule_id for f in r.findings if f.category == "violation"}
         want = set(m["expect_rules"])
         if m["ike_version"] == 1:  # IKEv1 Quick Mode is encrypted: ESP rules unobservable
-            want -= {"ESP-ENC-WEAK", "ESP-INTEG-WEAK", "ESP-NO-PFS"}
+            want -= V1_UNOBSERVABLE_RULES
         tp += len(got & want)
         fp += len(got - want)
         fn += len(want - got)
         positive = m["label"] != "benign"
-        rules_alert = r.risk.rules_component * 100 >= ALERT_RISK
-        ml_alert = bool(r.anomaly and r.anomaly["is_anomalous"])
-        for k, a in {"combined": rules_alert or ml_alert, "rules": rules_alert, "ml": ml_alert}.items():
-            counts[k][(0 if a else 2) if positive else (1 if a else 3)] += 1
+        _tally(counts, positive, r)
         rows.append({"capture": name, "label": m["label"], "risk": r.risk.score, "anomaly": r.anomaly["score"] if r.anomaly else None,
                      "extra_rules": sorted(got - want), "missing_rules": sorted(want - got)})
     return {"captures": len(man), "rule_level": _prf(tp, fp, fn, 0), "detection": {k: _prf(*v) for k, v in counts.items()}, "rows": rows}

@@ -1,15 +1,15 @@
 """Simulate one IPsec tunnel's on-the-wire life from a TunnelSpec and emit packets + ground truth."""
 from __future__ import annotations
 
-import math
 import struct
 from dataclasses import dataclass, field
 from random import Random
 
-from ipsec_analyzer.parser import constants as C
+from ipsec_analyzer.rules import load_policy
 
 from . import builder as B
 from .builder import SuiteSpec
+from .expected import expected_rules
 
 MAC_I, MAC_R = b"\x02\x00\x00\x00\x00\x01", b"\x02\x00\x00\x00\x00\x02"
 
@@ -65,6 +65,18 @@ class TunnelTruth:
     auth: str = "PSK"
 
 
+_TS_ITEMS = [(44, B.ts_payload("10.1.0.0", "10.1.255.255")), (45, B.ts_payload("10.2.0.0", "10.2.255.255"))]
+
+
+def _send_with_retx(send, t: float, msg: bytes, n: int) -> float:
+    """Send `msg` n times with exponential backoff, then once more; returns the time of the final send."""
+    for k in range(n):
+        send(t, True, msg)
+        t += 0.5 * (2 ** k)
+    send(t, True, msg)
+    return t
+
+
 def _jit(rng: Random, ms: float, rel: float = 0.15) -> float:
     return max(ms * (1 + rng.gauss(0, rel)), 0.05) / 1000.0
 
@@ -73,7 +85,6 @@ class _Sim:
     def __init__(self, spec: TunnelSpec, rng: Random, t0: float, ident0: int) -> None:
         self.s, self.rng, self.t, self.ident = spec, rng, t0, ident0
         self.pkts: list[tuple[float, bytes]] = []
-        self.msgid = 0
         self.flow_stats: list[tuple[int, int, int]] = []  # (packets on wire, replays, gaps)
         self.aux_ispis: list[str] = []
         self.n_ike = 0
@@ -201,15 +212,12 @@ def _v2(sim: _Sim, keyrows: list[str]) -> bytes:
     cert = [(37, b"\x04" + rng.randbytes(rng.randint(900, 1300)))] if s.auth == "RSA" else []
     inner_i = B.chain([
         (35, _ike_id(2, b"vpn-initiator.example.net")), *cert, (39, auth_body),
-        (33, B.v2_sa_esp(s.offered_esp, spi_i)), (44, B.ts_payload("10.1.0.0", "10.1.255.255")),
-        (45, B.ts_payload("10.2.0.0", "10.2.255.255"))])
-    first_i = 35
-    _send_sk(sim, keys, exch=35, msg_id=1, from_i=True, is_resp=False, first=first_i, inner=inner_i, frag=s.frag_auth, t=t)
+        (33, B.v2_sa_esp(s.offered_esp, spi_i)), *_TS_ITEMS])
+    _send_sk(sim, keys, exch=35, msg_id=1, from_i=True, is_resp=False, first=35, inner=inner_i, frag=s.frag_auth, t=t)
     t += rtt + _jit(rng, s.proc_ms * 1.5)
     inner_r = B.chain([
         (36, _ike_id(2, b"vpn-gateway.example.net")), (39, auth_body),
-        (33, B.v2_sa_esp([s.chosen_esp], spi_r)), (44, B.ts_payload("10.1.0.0", "10.1.255.255")),
-        (45, B.ts_payload("10.2.0.0", "10.2.255.255"))])
+        (33, B.v2_sa_esp([s.chosen_esp], spi_r)), *_TS_ITEMS])
     _send_sk(sim, keys, exch=35, msg_id=1, from_i=False, is_resp=True, first=36, inner=inner_r, frag=s.frag_auth, t=t)
     t += rtt / 2
 
@@ -225,18 +233,18 @@ def _v2(sim: _Sim, keyrows: list[str]) -> bytes:
         e2 = sim.flow(seg_start, per, spi_i_int, False)
         seg_end = max(e1, e2)
         if seg < s.child_rekeys:
-            rt = seg_end + rng.uniform(0.05, 0.4) * (0.05 if s.family == "rekey_storm" else 1)
+            rt = seg_end + rng.uniform(0.05, 0.4)
             new_i, new_r = rng.randbytes(4), rng.randbytes(4)
             esp_o = B.v2_sa_esp(s.offered_esp, new_i)
             items = [(41, B.notify_body(16393, spi=spi_r, proto=3)), (33, esp_o), (40, ni)]
             if s.rekey_uses_ke and s.chosen_esp.dh:
                 items.append((34, B.ke_body(s.chosen_esp.dh, rng)))
-            items += [(44, B.ts_payload("10.1.0.0", "10.1.255.255")), (45, B.ts_payload("10.2.0.0", "10.2.255.255"))]
+            items += _TS_ITEMS
             _send_sk(sim, keys, exch=36, msg_id=msgid, from_i=True, is_resp=False, first=items[0][0], inner=B.chain(items), t=rt)
             ritems = [(33, B.v2_sa_esp([s.chosen_esp], new_r)), (40, nr)]
             if s.rekey_uses_ke and s.chosen_esp.dh:
                 ritems.append((34, B.ke_body(s.chosen_esp.dh, rng)))
-            ritems += [(44, B.ts_payload("10.1.0.0", "10.1.255.255")), (45, B.ts_payload("10.2.0.0", "10.2.255.255"))]
+            ritems += _TS_ITEMS
             _send_sk(sim, keys, exch=36, msg_id=msgid, from_i=False, is_resp=True, first=ritems[0][0], inner=B.chain(ritems), t=rt + rtt + proc)
             msgid += 1
             spi_i_int, spi_r_int = struct.unpack("!I", new_i)[0], struct.unpack("!I", new_r)[0]
@@ -274,7 +282,7 @@ def _send_sk(sim: _Sim, keys: B.IkeKeys, *, exch: int, msg_id: int, from_i: bool
 def _rejected_attempt(sim: _Sim, t: float) -> float:
     s, rng = sim.s, sim.rng
     ispi = rng.randbytes(8)
-    items = [(33, B.v2_sa_ike(s.prior_reject or [])), (34, B.ke_body((s.prior_reject or [])[0].dh or "MODP_2048", rng)),
+    items = [(33, B.v2_sa_ike(s.prior_reject)), (34, B.ke_body(s.prior_reject[0].dh or "MODP_2048", rng)),
              (40, rng.randbytes(32))]
     sim.ike(t, True, B.ike_header(ispi, b"\x00" * 8, 33, 0x20, 34, 0x08, 0, B.chain(items)), True)
     rt = t + _jit(sim.rng, s.rtt_ms) + 0.003
@@ -307,7 +315,7 @@ def _v1(sim: _Sim) -> bytes:
     rtt, proc = _jit(rng, s.rtt_ms), _jit(rng, s.proc_ms)
     auth = "PSK"
     ch = s.chosen_ike
-    vids = B.v1_vendor_ids(rng, dpd=True, natt=True, xauth=False, frag=False)
+    vids = B.v1_vendor_ids(dpd=True, natt=True, xauth=False, frag=False)
     if s.extra_vid_bytes:
         vids.append((13, rng.randbytes(s.extra_vid_bytes)))
 
@@ -319,10 +327,7 @@ def _v1(sim: _Sim) -> bytes:
     if s.aggressive:
         m1 = B.v1_message(ispi, b"\x00" * 8, 4, 0, 0, [(1, B.v1_sa_body(s.offered_ike, auth, s.v1_life_s)),
                           (4, B.ke_body(s.offered_ike[0].dh or "MODP_2048", rng, v1=True)), (10, rng.randbytes(20)), (5, idb), *vids])
-        for k in range(s.retransmits):
-            send(t, True, m1)
-            t += 0.5 * (2 ** k)
-        send(t, True, m1)
+        t = _send_with_retx(send, t, m1, s.retransmits)
         t += rtt + proc
         send(t, False, B.v1_message(ispi, rspi, 4, 0, 0, [(1, B.v1_sa_body([ch], auth, s.v1_life_s)),
                                     (4, B.ke_body(ch.dh or "MODP_2048", rng, v1=True)), (10, rng.randbytes(20)), (5, idb), (8, hashb), *vids]))
@@ -330,10 +335,7 @@ def _v1(sim: _Sim) -> bytes:
         send(t, True, B.v1_message(ispi, rspi, 4, 0, 0, [(8, hashb)]))
     else:
         m1 = B.v1_message(ispi, b"\x00" * 8, 2, 0, 0, [(1, B.v1_sa_body(s.offered_ike, auth, s.v1_life_s)), *vids])
-        for k in range(s.retransmits):
-            send(t, True, m1)
-            t += 0.5 * (2 ** k)
-        send(t, True, m1)
+        t = _send_with_retx(send, t, m1, s.retransmits)
         t += rtt
         send(t, False, B.v1_message(ispi, rspi, 2, 0, 0, [(1, B.v1_sa_body([ch], auth, s.v1_life_s)), *vids]))
         t += rtt / 2
@@ -353,9 +355,8 @@ def _v1(sim: _Sim) -> bytes:
         send(t + i * (rtt / 2 if i else 0), from_i, ike_enc_blob(ispi, rspi, 32, qmid, rng))
     t += rtt * 1.5 + 0.01
     spi_i, spi_r = rng.getrandbits(32) | 0x100, rng.getrandbits(32) | 0x100
-    e1 = sim.flow(t, s.traffic_pkts // 2, spi_r, True)
-    e2 = sim.flow(t, s.traffic_pkts // 2, spi_i, False)
-    end = max(e1, e2)
+    sim.flow(t, s.traffic_pkts // 2, spi_r, True)
+    sim.flow(t, s.traffic_pkts // 2, spi_i, False)
     for k in range(s.dpd_count):
         dt = t + (k + 1) * s.dpd_interval_s
         send(dt, True, ike_enc_blob(ispi, rspi, 5, rng.randrange(1, 2**32), rng))
@@ -371,10 +372,6 @@ def ike_enc_blob(ispi: bytes, rspi: bytes, exch: int, msg_id: int, rng: Random) 
 
 # ============================================================================= truth
 def _truth(spec: TunnelSpec, ispi: bytes, sim: _Sim) -> TunnelTruth:
-    from ipsec_analyzer.rules import load_policy
-
-    from .expected import expected_rules  # local import to avoid a cycle at import time
-
     exp, assess = expected_rules(spec, load_policy(), sim.flow_stats)
     return TunnelTruth(
         ispi=ispi.hex(), label=spec.label, family=spec.family, ike_version=spec.version,

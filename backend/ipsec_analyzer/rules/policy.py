@@ -9,6 +9,9 @@ import yaml
 
 TIER_RANK = {"prohibited": 0, "deprecated": 1, "acceptable": 2, "recommended": 3}
 SEVERITIES = ("critical", "high", "medium", "low", "info")
+SEV_ORDER = {s: i for i, s in enumerate(SEVERITIES)}
+# ESP-level rules cannot be observed for IKEv1 (Quick Mode is encrypted)
+V1_UNOBSERVABLE_RULES = frozenset({"ESP-ENC-WEAK", "ESP-INTEG-WEAK", "ESP-NO-PFS"})
 DEFAULT_POLICY = Path(__file__).resolve().parents[2] / "policy" / "nist_rfc8221.yaml"
 
 

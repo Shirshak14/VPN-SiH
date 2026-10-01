@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-sys.path.insert(0, str(ROOT_BACKEND := Path(__file__).resolve().parent.parent / "backend"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 from scenarios import SCENARIOS, Scenario  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -42,7 +42,7 @@ def swanctl_conf(sc: Scenario, role: str, ike: str, esp: str) -> str:
     lid, rid = ("@init", "@resp") if init else ("@resp", "@init")  # "@" = literal FQDN identity, required for IKEv1 aggressive PSK lookup
     lts, rts = ("10.1.0.0/24", "10.2.0.0/24") if init else ("10.2.0.0/24", "10.1.0.0/24")
     rekey = f"rekey_time = {sc.rekey_time}" if sc.rekey_time != "0s" else ""
-    crekey = f"rekey_time = {sc.child_rekey_time}" if sc.child_rekey_time != "0s" else "rekey_time = 0s"
+    crekey = f"rekey_time = {sc.child_rekey_time}"
     aggr = "aggressive = yes" if sc.aggressive else ""
     return textwrap.dedent(f"""\
         connections {{

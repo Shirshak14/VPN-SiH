@@ -39,12 +39,12 @@ def esp_for(ike: SuiteSpec, pfs: bool) -> SuiteSpec:
     return S(ike.encr, ike.bits, ike.integ, None, dh)
 
 
-def _endpoints(rng: Random, idx: int) -> tuple[str, str]:
+def _endpoints(rng: Random) -> tuple[str, str]:
     return f"198.51.{rng.randint(1, 250)}.{rng.randint(2, 250)}", f"203.0.{rng.randint(1, 250)}.{rng.randint(2, 250)}"
 
 
 def _base(rng: Random, label: str, family: str) -> TunnelSpec:
-    a, b = _endpoints(rng, 0)
+    a, b = _endpoints(rng)
     rtt = min(max(rng.lognormvariate(3.2, 0.7), 2.0), 160.0)  # median ~25 ms
     auth = rng.choice(("PSK", "RSA"))
     return TunnelSpec(
@@ -54,6 +54,16 @@ def _base(rng: Random, label: str, family: str) -> TunnelSpec:
         frag_auth=(auth == "RSA" and rng.random() < 0.6), cookie=rng.random() < 0.05,
         retransmits=1 if rng.random() < 0.06 else 0,
     )
+
+
+def _to_v1(s: TunnelSpec) -> None:
+    s.version, s.natt, s.frag_auth, s.cookie, s.child_rekeys = 1, False, False, False, 0
+
+
+def _behavioral(rng: Random, family: str) -> TunnelSpec:
+    s = b_modern(rng)
+    s.label, s.family = "behavioral", family
+    return s
 
 
 def _finish(spec: TunnelSpec, ike: SuiteSpec, esp: SuiteSpec) -> TunnelSpec:
@@ -93,52 +103,49 @@ def b_legacy_sha1(rng: Random) -> TunnelSpec:
 
 def b_v1_strong(rng: Random) -> TunnelSpec:
     s = _base(rng, "benign", "b_v1_strong")
-    s.version, s.natt, s.frag_auth, s.cookie, s.child_rekeys = 1, False, False, False, 0
+    _to_v1(s)
     ike = S("AES_CBC", rng.choice((128, 256)), rng.choice(("HMAC_SHA2_256_128", "HMAC_SHA2_384_192")), None, rng.choice(("MODP_2048", "MODP_3072")))
     return _finish(s, ike, esp_for(ike, pfs=True))
 
 
 # --- weak-config ----------------------------------------------------------------------------
-def _weak_spec(rng: Random, fam: str) -> TunnelSpec:
-    return _base(rng, "weak-config", fam)
-
-
 def w_ike_3des(rng: Random) -> TunnelSpec:
-    s = _weak_spec(rng, "w_ike_3des")
+    s = _base(rng, "weak-config", "w_ike_3des")
     ike = S("3DES", None, rng.choice(("HMAC_SHA2_256_128", "HMAC_SHA1_96")), "HMAC_SHA2_256", rng.choice(("MODP_2048", "MODP_3072")))
     esp = esp_for(rng.choice(STRONG_IKE), True)
     return _finish(s, ike, esp)
 
 
 def w_ike_dh1024(rng: Random) -> TunnelSpec:
-    s = _weak_spec(rng, "w_ike_dh1024")
+    s = _base(rng, "weak-config", "w_ike_dh1024")
     ike = S("AES_CBC", 256, "HMAC_SHA2_256_128", "HMAC_SHA2_256", rng.choice(("MODP_1024", "MODP_768", "MODP_1536")))
     return _finish(s, ike, esp_for(ike, pfs=True))
 
 
 def w_ike_md5(rng: Random) -> TunnelSpec:
-    s = _weak_spec(rng, "w_ike_md5")
+    s = _base(rng, "weak-config", "w_ike_md5")
     ike = S("AES_CBC", 128, "HMAC_MD5_96", "HMAC_MD5", rng.choice(("MODP_2048", "MODP_1024")))
     return _finish(s, ike, esp_for(ike, pfs=True))
 
 
 def w_esp_weak(rng: Random) -> TunnelSpec:
-    s = _weak_spec(rng, "w_esp_weak")
+    s = _base(rng, "weak-config", "w_esp_weak")
     ike = rng.choice(STRONG_IKE)
     esp = S(rng.choice(("3DES", "DES")), None, rng.choice(("HMAC_SHA1_96", "HMAC_MD5_96", "HMAC_SHA2_256_128")), None, ike.dh if rng.random() < 0.5 else None)
     return _finish(s, ike, esp)
 
 
 def w_no_pfs(rng: Random) -> TunnelSpec:
-    s = _weak_spec(rng, "w_no_pfs")
+    s = _base(rng, "weak-config", "w_no_pfs")
     ike = rng.choice(STRONG_IKE + ACCEPT_IKE)
     s.child_rekeys, s.rekey_uses_ke = rng.choice((1, 2, 3)), False
     return _finish(s, ike, esp_for(ike, pfs=False))
 
 
 def w_v1_aggr_psk(rng: Random) -> TunnelSpec:
-    s = _weak_spec(rng, "w_v1_aggr_psk")
-    s.version, s.aggressive, s.natt, s.frag_auth, s.cookie, s.child_rekeys = 1, True, False, False, False, 0
+    s = _base(rng, "weak-config", "w_v1_aggr_psk")
+    _to_v1(s)
+    s.aggressive = True
     ike = S(rng.choice(("AES_CBC", "AES_CBC", "3DES")), 128, rng.choice(("HMAC_SHA1_96", "HMAC_SHA2_256_128")), None,
             rng.choice(("MODP_1024", "MODP_2048", "MODP_1536")))
     if ike.encr == "3DES":
@@ -147,23 +154,22 @@ def w_v1_aggr_psk(rng: Random) -> TunnelSpec:
 
 
 def w_v1_main_legacy(rng: Random) -> TunnelSpec:
-    s = _weak_spec(rng, "w_v1_main_legacy")
-    s.version, s.natt, s.frag_auth, s.cookie, s.child_rekeys = 1, False, False, False, 0
+    s = _base(rng, "weak-config", "w_v1_main_legacy")
+    _to_v1(s)
     ike = S("3DES", None, rng.choice(("HMAC_MD5_96", "HMAC_SHA1_96")), None, rng.choice(("MODP_1024", "MODP_768")))
     return _finish(s, ike, esp_for(ike, pfs=False))
 
 
 def w_legacy_combo(rng: Random) -> TunnelSpec:
-    s = _weak_spec(rng, "w_legacy_combo")
+    s = _base(rng, "weak-config", "w_legacy_combo")
     ike = S(rng.choice(("3DES", "DES")), None, rng.choice(("HMAC_MD5_96", "HMAC_SHA1_96")), rng.choice(("HMAC_MD5", "HMAC_SHA1")),
             rng.choice(("MODP_768", "MODP_1024")))
     return _finish(s, ike, esp_for(ike, pfs=False))
 
 
 def w_long_lifetime(rng: Random) -> TunnelSpec:
-    s = _weak_spec(rng, "w_long_lifetime")  # low severity only -> reclassified below as advisory
-    s.label = "weak-config"
-    s.version, s.natt, s.frag_auth, s.cookie, s.child_rekeys = 1, False, False, False, 0
+    s = _base(rng, "weak-config", "w_long_lifetime")
+    _to_v1(s)
     s.aggressive = True  # combine with aggressive PSK so the family stays medium+
     ike = S("AES_CBC", 256, "HMAC_SHA2_256_128", None, "MODP_2048")
     s.v1_life_s = rng.choice((172800, 604800, 2592000))
@@ -204,43 +210,40 @@ def d_dh_only(rng: Random) -> TunnelSpec:
 
 # --- behavioural anomalies (compliant crypto) -----------------------------------------------
 def a_retransmit_burst(rng: Random) -> TunnelSpec:
-    s = b_modern(rng)
-    s.label, s.family, s.retransmits, s.rtt_ms = "behavioral", "a_retransmit_burst", rng.randint(3, 6), rng.uniform(40, 200)
+    s = _behavioral(rng, "a_retransmit_burst")
+    s.retransmits, s.rtt_ms = rng.randint(3, 6), rng.uniform(40, 200)
     return s
 
 
 def a_slow_relay(rng: Random) -> TunnelSpec:
-    s = b_modern(rng)
-    s.label, s.family = "behavioral", "a_slow_relay"
+    s = _behavioral(rng, "a_slow_relay")
     s.rtt_ms, s.proc_ms = rng.uniform(380, 900), rng.uniform(5, 20)
     return s
 
 
 def a_rekey_storm(rng: Random) -> TunnelSpec:
-    s = b_modern(rng)
-    s.label, s.family, s.child_rekeys = "behavioral", "a_rekey_storm", rng.randint(9, 16)
+    s = _behavioral(rng, "a_rekey_storm")
+    s.child_rekeys = rng.randint(9, 16)
     s.traffic_pkts, s.traffic_rate_hz = rng.randint(90, 160), rng.uniform(60, 140)
     return s
 
 
 def a_esp_replay(rng: Random) -> TunnelSpec:
-    s = b_modern(rng)
-    s.label, s.family = "behavioral", "a_esp_replay"
+    s = _behavioral(rng, "a_esp_replay")
     s.replay_ratio, s.gap_ratio = rng.uniform(0.04, 0.12), rng.choice((0.0, rng.uniform(0.06, 0.2)))
     s.traffic_pkts = max(s.traffic_pkts, 100)
     return s
 
 
 def a_oversize_handshake(rng: Random) -> TunnelSpec:
-    s = b_modern(rng)
-    s.label, s.family, s.extra_vid_bytes = "behavioral", "a_oversize_handshake", rng.randint(700, 1200)
+    s = _behavioral(rng, "a_oversize_handshake")
+    s.extra_vid_bytes = rng.randint(700, 1200)
     s.frag_auth = False
     return s
 
 
 def a_half_open_scan(rng: Random) -> TunnelSpec:
-    s = b_modern(rng)
-    s.label, s.family = "behavioral", "a_half_open_scan"
+    s = _behavioral(rng, "a_half_open_scan")
     s.half_open_attempts, s.retransmits = rng.randint(8, 25), rng.randint(2, 4)
     s.cookie, s.frag_auth = False, False
     return s

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from ..reports.export import to_json, to_syslog
 from ..reports.pdf import build_pdf
+from ..rules.policy import SEV_ORDER
 from . import service
 from .db import DATA_DIR, Analysis, SessionLocal, TunnelRow, init_db
 
@@ -211,7 +212,6 @@ def remediation(aid: int, s: Session = Depends(db)) -> list[dict[str, Any]]:
     """Consolidated remediation plan: each remediation once, with the rules/tunnels that need it."""
     _done(s, aid)
     plan: dict[str, dict[str, Any]] = {}
-    order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
     for p in _tunnels(s, aid):
         for f in p["findings"]:
             if f["category"] != "violation":
@@ -219,10 +219,10 @@ def remediation(aid: int, s: Session = Depends(db)) -> list[dict[str, Any]]:
             r = plan.setdefault(f["remediation"]["id"], {**f["remediation"], "rules": set(), "tunnels": set(), "severity": f["severity"]})
             r["rules"].add(f["rule_id"])
             r["tunnels"].add(p["tunnel"]["id"])
-            if order[f["severity"]] < order[r["severity"]]:
+            if SEV_ORDER[f["severity"]] < SEV_ORDER[r["severity"]]:
                 r["severity"] = f["severity"]
     return sorted(({**v, "rules": sorted(v["rules"]), "tunnels": sorted(v["tunnels"])} for v in plan.values()),
-                  key=lambda v: order[v["severity"]])
+                  key=lambda v: SEV_ORDER[v["severity"]])
 
 
 @app.get("/api/analyses/{aid}/report.pdf")

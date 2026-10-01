@@ -7,14 +7,12 @@
 """
 from __future__ import annotations
 
-from ipsec_analyzer.rules.policy import Policy
+from ipsec_analyzer.parser.constants import V2_ENCR_TO_V1 as _V1_ENC, V2_INTEG_TO_V1 as _V1_HASH
+from ipsec_analyzer.rules.policy import V1_UNOBSERVABLE_RULES, Policy
 
 from .builder import SuiteSpec
 
 _BAD = ("prohibited", "deprecated")
-_V1_HASH = {"HMAC_MD5_96": "MD5", "HMAC_SHA1_96": "SHA1", "HMAC_SHA2_256_128": "SHA2_256",
-            "HMAC_SHA2_384_192": "SHA2_384", "HMAC_SHA2_512_256": "SHA2_512"}
-_V1_ENC = {"AES_CBC": "AES_CBC", "3DES": "3DES_CBC", "DES": "DES_CBC"}
 
 
 def _rank(policy: Policy, s: SuiteSpec, v1: bool) -> int | None:
@@ -74,5 +72,5 @@ def expected_rules(spec, policy: Policy, flow_stats: list[tuple[int, int, int]])
                 exp.add("ESP-SEQ-GAPS")
     assessable = set(exp)
     if v1:
-        assessable -= {"ESP-ENC-WEAK", "ESP-INTEG-WEAK", "ESP-NO-PFS"}
+        assessable -= V1_UNOBSERVABLE_RULES
     return sorted(exp), sorted(assessable)

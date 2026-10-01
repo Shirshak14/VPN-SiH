@@ -159,3 +159,8 @@ V2_FLAG_INITIATOR, V2_FLAG_VERSION, V2_FLAG_RESPONSE = 0x08, 0x10, 0x20
 V1_FLAG_ENCRYPT, V1_FLAG_COMMIT = 0x01, 0x02
 
 IKE_PORT, NATT_PORT = 500, 4500
+
+# IKEv2 transform names -> IKEv1 names (single source for generator, ground truth and evaluation)
+V2_ENCR_TO_V1 = {"AES_CBC": "AES_CBC", "3DES": "3DES_CBC", "DES": "DES_CBC"}
+V2_INTEG_TO_V1 = {"HMAC_MD5_96": "MD5", "HMAC_SHA1_96": "SHA1", "HMAC_SHA2_256_128": "SHA2_256",
+                  "HMAC_SHA2_384_192": "SHA2_384", "HMAC_SHA2_512_256": "SHA2_512"}

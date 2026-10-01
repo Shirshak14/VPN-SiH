@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from random import Random
 
 from cryptography.hazmat.decrepit.ciphers.algorithms import TripleDES
@@ -105,10 +106,6 @@ def v2_sa_esp(suites: list[SuiteSpec], spi: bytes) -> bytes:
     return v2_proposal_body([(i + 1, C.PROTO_ESP, spi, esp_transforms(s)) for i, s in enumerate(suites)])
 
 
-def v2_sa_ike_rekey(suites: list[SuiteSpec], spi: bytes) -> bytes:
-    return v2_proposal_body([(i + 1, C.PROTO_IKE, spi, ike_transforms(s)) for i, s in enumerate(suites)])
-
-
 def ke_body(group: str, rng: Random, v1: bool = False) -> bytes:
     size = {"MODP_768": 96, "MODP_1024": 128, "MODP_1536": 192, "MODP_2048": 256, "MODP_3072": 384,
             "MODP_4096": 512, "ECP_256": 64, "ECP_384": 96, "ECP_521": 132, "CURVE_25519": 32}.get(group, 256)
@@ -122,7 +119,6 @@ def notify_body(ntype: int, data: bytes = b"", proto: int = 0, spi: bytes = b"")
 
 def ts_payload(lo: str, hi: str) -> bytes:
     # Number of TS (1) + 3 reserved + one IPv4 address-range selector (RFC 7296 3.13.1)
-    import ipaddress
     sel = struct.pack("!BBHHH", 7, 0, 16, 0, 65535) + ipaddress.IPv4Address(lo).packed + ipaddress.IPv4Address(hi).packed
     return struct.pack("!BBBB", 1, 0, 0, 0) + sel
 
@@ -206,15 +202,14 @@ def seal_sk_message(keys: IkeKeys, rng: Random, *, exch: int, msg_id: int, from_
 
 
 # ------------------------------------------------------------------------- IKEv1
-def v1_transform(num: int, s: SuiteSpec, auth: str, life: int) -> bytes:
+def v1_transform(s: SuiteSpec, auth: str, life: int) -> bytes:
     def tv(t: int, v: int) -> bytes:
         return struct.pack("!HH", 0x8000 | t, v)
 
-    attrs = tv(C.A1_ENC, _V1_ENC_ID[{"AES_CBC": "AES_CBC", "3DES": "3DES_CBC", "DES": "DES_CBC"}[s.encr]])
+    attrs = tv(C.A1_ENC, _V1_ENC_ID[C.V2_ENCR_TO_V1[s.encr]])
     if s.bits and s.encr == "AES_CBC":
         attrs += tv(C.A1_KEYLEN, s.bits)
-    hname = {"HMAC_MD5_96": "MD5", "HMAC_SHA1_96": "SHA1", "HMAC_SHA2_256_128": "SHA2_256",
-             "HMAC_SHA2_384_192": "SHA2_384", "HMAC_SHA2_512_256": "SHA2_512"}[s.integ or "HMAC_SHA2_256_128"]
+    hname = C.V2_INTEG_TO_V1[s.integ or "HMAC_SHA2_256_128"]
     attrs += tv(C.A1_HASH, _V1_HASH_ID[hname]) + tv(C.A1_AUTH, _V1_AUTH_ID[auth]) + tv(C.A1_GROUP, _DH_ID[s.dh or "MODP_2048"])
     attrs += tv(C.A1_LIFE_TYPE, 1)
     attrs += tv(C.A1_LIFE_DUR, life) if life < 65536 else struct.pack("!HH", C.A1_LIFE_DUR, 4) + struct.pack("!I", life)
@@ -224,7 +219,7 @@ def v1_transform(num: int, s: SuiteSpec, auth: str, life: int) -> bytes:
 def v1_sa_body(suites: list[SuiteSpec], auth: str, life: int) -> bytes:
     trans = b""
     for i, s in enumerate(suites):
-        attrs = v1_transform(i + 1, s, auth, life)
+        attrs = v1_transform(s, auth, life)
         last = i == len(suites) - 1
         trans += struct.pack("!BBHBBH", 0 if last else 3, 0, 8 + len(attrs), i + 1, 1, 0) + attrs
     prop = struct.pack("!BBHBBBB", 0, 0, 8 + len(trans), 1, 1, 0, len(suites)) + trans
@@ -237,7 +232,7 @@ def v1_message(ispi: bytes, rspi: bytes, exch: int, flags: int, msg_id: int, ite
     return ike_header(ispi, rspi, first, 0x10, exch, flags, msg_id, body)
 
 
-def v1_vendor_ids(rng: Random, dpd: bool = True, natt: bool = True, xauth: bool = False, frag: bool = False) -> list[tuple[int, bytes]]:
+def v1_vendor_ids(dpd: bool = True, natt: bool = True, xauth: bool = False, frag: bool = False) -> list[tuple[int, bytes]]:
     vids = []
     for name, on in (("NAT-T RFC 3947", natt), ("DPD RFC 3706", dpd), ("XAUTH", xauth), ("IKE Fragmentation", frag)):
         if on:
@@ -251,7 +246,6 @@ def esp_packet(spi: int, seq: int, payload_len: int, rng: Random) -> bytes:
 
 
 def ipv4_udp_frame(src: str, dst: str, sport: int, dport: int, payload: bytes, ident: int) -> bytes:
-    import ipaddress
     udp = struct.pack("!HHHH", sport, dport, 8 + len(payload), 0) + payload
     return _ipv4(src, dst, 17, udp, ident)
 
@@ -261,7 +255,6 @@ def ipv4_esp_frame(src: str, dst: str, esp: bytes, ident: int) -> bytes:
 
 
 def _ipv4(src: str, dst: str, proto: int, payload: bytes, ident: int) -> bytes:
-    import ipaddress
     hdr = struct.pack("!BBHHHBBH4s4s", 0x45, 0, 20 + len(payload), ident & 0xFFFF, 0x4000, 64, proto, 0,
                       ipaddress.IPv4Address(src).packed, ipaddress.IPv4Address(dst).packed)
     s = sum(struct.unpack("!10H", hdr))

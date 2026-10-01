@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..sa.models import Suite, Tunnel
-from .policy import TIER_RANK, Policy, load_policy
+from .policy import SEV_ORDER, TIER_RANK, Policy, load_policy
 
 Evidence = dict[str, Any]
 
@@ -28,7 +28,7 @@ class Finding:
         return dict(self.__dict__)
 
 
-# A check returns None (no violation) or (severity_key_or_tier, evidence).
+# A check returns a list of (severity_key_or_tier, evidence); empty means no violation.
 CheckResult = list[tuple[str, Evidence]]
 Check = Callable[[Tunnel, "RuleEngine", dict[str, Any], dict[str, Any]], CheckResult]
 _CHECKS: dict[str, Check] = {}
@@ -59,8 +59,7 @@ class RuleEngine:
             if sev is not None:
                 out.append(self._finding(rule, t, sev, "violation", evidence))
         out.extend(self._coverage(t))
-        order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
-        out.sort(key=lambda f: (order[f.severity], f.rule_id))
+        out.sort(key=lambda f: (SEV_ORDER[f.severity], f.rule_id))
         return out
 
     def suite_rank(self, s: Suite) -> int | None:

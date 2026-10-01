@@ -6,6 +6,7 @@ decoding is done here so throughput is predictable and behaviour is explicit.
 from __future__ import annotations
 
 import ipaddress
+import socket
 import struct
 import time
 from pathlib import Path
@@ -156,8 +157,8 @@ def _handle_ip(version: int, l3: bytes, frame_no: int, ts: float, ike, esp, stat
         total = struct.unpack_from("!H", l3, 2)[0]
         ident, ff = struct.unpack_from("!HH", l3, 4)
         proto = l3[9]
-        src = str(ipaddress.IPv4Address(l3[12:16]))
-        dst = str(ipaddress.IPv4Address(l3[16:20]))
+        src = socket.inet_ntoa(l3[12:16])
+        dst = socket.inet_ntoa(l3[16:20])
         payload = l3[ihl:total] if total >= ihl else l3[ihl:]
         more, foff = bool(ff & 0x2000), (ff & 0x1FFF) * 8
         if more or foff:
