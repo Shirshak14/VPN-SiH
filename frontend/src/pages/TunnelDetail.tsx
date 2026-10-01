@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Json, api, fmtTs } from "../api";
 import { Empty, ErrorBox, Loading, Meter, Sev } from "../ui";
 
+const SEVS = ["critical", "high", "medium", "low", "info"];
+
 function Timeline({ events }: { events: Json[] }) {
   const [shown, setShown] = useState(events.length);
   const timer = useRef<number | null>(null);
@@ -31,7 +33,7 @@ function Timeline({ events }: { events: Json[] }) {
             <span>
               <b>{e.label}</b> <span className="muted small">{e.size} B</span>
               {e.retransmit && <span className="retx"> · retransmission</span>}
-              {e.encrypted && <span className="chip" style={{ marginLeft: 6 }}>encrypted</span>}
+              {e.encrypted && <span className="chip" style={{ marginLeft: "var(--sp-2)" }}>encrypted</span>}
               <div className="small muted">{(e.notes ?? []).join(" · ")}</div>
             </span>
           </li>
@@ -78,18 +80,18 @@ export default function TunnelDetail({ aid, tid }: { aid: number; tid: string })
       <div className="card">
         <div className="row spread">
           <div>
-            <h1 className="mono" style={{ fontSize: 18 }}>{t.initiator} → {t.responder}</h1>
+            <h1 className="mono">{t.initiator} → {t.responder}</h1>
             <div className="muted small">{t.exchange_mode} · status <b>{t.status}</b>{t.failure ? ` (${t.failure})` : ""} · SPI <span className="mono">{t.ispi}</span></div>
           </div>
           <div style={{ minWidth: 220 }}>
-            <div className="row" style={{ gap: 10 }}><span className="big">{risk.score}</span><Sev level={risk.band} /></div>
+            <div className="row" style={{ gap: "var(--sp-3)" }}><span className="big">{risk.score}</span><Sev level={risk.band} /></div>
             <Meter score={risk.score} band={risk.band} />
           </div>
         </div>
         <h3>How this score was computed</h3>
         <div className="small">
           <code>{risk.formula}</code>
-          <div style={{ marginTop: 6 }}>
+          <div style={{ marginTop: "var(--sp-2)" }}>
             R (rules) = <b>{risk.rules_component}</b> from {risk.contributions.length ? risk.contributions.map((c: Json) => `${c.rule_id} (${c.severity}, w=${c.weight})`).join(", ") : "no violations"}
             {" · "}A (anomaly) = <b>{risk.anomaly_component}</b>{risk.anomaly_score == null ? " (model not loaded)" : ` (score ${risk.anomaly_score} × weight)`}
           </div>
@@ -127,19 +129,26 @@ export default function TunnelDetail({ aid, tid }: { aid: number; tid: string })
 
       <div className="card">
         <h2>Rule-engine findings ({viol.length})</h2>
-        {viol.length === 0 ? <Empty>No policy violations for this tunnel.</Empty> : (
+        {viol.length > 0 && (
+          <div className="bands" aria-label="Findings by severity">
+            {SEVS.filter((sv) => viol.some((f: Json) => f.severity === sv)).map((sv) => (
+              <span key={sv} className={`badge ${sv}`}>{viol.filter((f: Json) => f.severity === sv).length} {sv}</span>
+            ))}
+          </div>
+        )}
+        {viol.length === 0 ? <div className="banner pass-banner" role="status"><b>✓ No policy violations</b> for this tunnel among the checks that could be assessed.</div> : (
           <div className="stack">
             {viol.map((f: Json, i: number) => (
               <div key={f.rule_id + i} className={`finding ${f.severity}`}>
                 <div className="row"><Sev level={f.severity} /><b>{f.rule_id}</b><span>{f.title}</span></div>
-                <p className="small" style={{ margin: "6px 0" }}>{f.description}</p>
+                <p className="small" style={{ margin: "var(--sp-2) 0" }}>{f.description}</p>
                 <pre className="mono">{Object.entries(f.evidence).filter(([k]) => k !== "all_offenders").map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`).join("\n")}</pre>
-                <div className="small" style={{ marginTop: 8 }}>
+                <div className="small" style={{ marginTop: "var(--sp-2)" }}>
                   <b>MITRE ATT&amp;CK:</b>{" "}
                   {f.mitre.length ? f.mitre.map((m: Json) => <a key={m.id} className="chip" href={m.url} target="_blank" rel="noreferrer">{m.id} {m.name}</a>) : <span className="muted">no direct technique mapped</span>}
                 </div>
                 <div className="small"><b>Standards:</b> {f.refs.join(" · ")}</div>
-                <details style={{ marginTop: 6 }}>
+                <details style={{ marginTop: "var(--sp-2)" }}>
                   <summary className="small"><b>Remediation:</b> {f.remediation.title}</summary>
                   <ol className="small">{f.remediation.steps.map((s: string) => <li key={s}>{s}</li>)}</ol>
                   {f.remediation.example && <pre className="mono">{f.remediation.example}</pre>}
@@ -151,7 +160,7 @@ export default function TunnelDetail({ aid, tid }: { aid: number; tid: string })
         {cov.length > 0 && (
           <>
             <h3>Not assessable from this capture</h3>
-            {cov.map((f: Json) => <div key={f.rule_id} className="banner small" style={{ marginBottom: 6 }}><b>{f.title}.</b> {f.description}</div>)}
+            {cov.map((f: Json) => <div key={f.rule_id} className="banner small" style={{ marginBottom: "var(--sp-2)" }}><b>{f.title}.</b> {f.description}</div>)}
           </>
         )}
       </div>

@@ -13,14 +13,14 @@ const STEPS = [
 function Pipeline({ stage }: { stage: string | null }) {
   const idx = stage == null ? -1 : stage === "done" ? STEPS.length : STEPS.findIndex((s) => s.key === stage);
   return (
-    <div className="pipeline" aria-label="Analysis pipeline">
+    <ol className="az-flow" aria-label="Analysis pipeline">
       {STEPS.map((s, i) => (
-        <div key={s.key} className={`step ${i < idx ? "done" : i === idx ? "active" : ""}`}>
-          <b>{s.title}</b>
-          <span>{s.sub}</span>
-        </div>
+        <li key={s.key} className={i < idx ? "done" : i === idx ? "active" : ""}>
+          <span className="n" aria-hidden="true">{i + 1}</span>
+          <span><b>{s.title}</b><small>{s.sub}</small></span>
+        </li>
       ))}
-    </div>
+    </ol>
   );
 }
 
@@ -62,96 +62,73 @@ export default function Analyze() {
   const busy = running != null && running.status !== "failed";
 
   return (
-    <div className="stack">
-      <section>
-        <h1>From manual audit to automated assessment</h1>
-        <p className="muted" style={{ margin: 0 }}>
-          Upload an IPsec capture; the analyzer reconstructs every tunnel, checks it against NIST SP 800-77r1 / RFC 8221 policy, scores anomalies, and
-          produces a remediation report.
+    <div className="az">
+      <header className="az-hero">
+        <h1>Automate IPsec/IKE security assessment</h1>
+        <p>
+          Upload a packet capture to reconstruct tunnels, check them against NIST SP 800-77r1 and RFC 8221, score behavioural anomalies, and
+          export an audit-ready report (PDF, JSON, syslog).
         </p>
-      </section>
-
-      <div className="ba">
-        <div className="card before">
-          <h2>Before — manual, reactive</h2>
-          <ul className="small">
-            <li>Open the capture in a packet viewer and read IKE packets one by one</li>
-            <li>Expert knowledge needed to decode transforms and DH groups</li>
-            <li>No view of the whole tunnel lifecycle (init → auth → child SA → rekey)</li>
-            <li>Weak ciphers and aggressive-mode PSK stay hidden until exploited</li>
-          </ul>
-        </div>
-        <div className="card after">
-          <h2>After — automated assessment</h2>
-          <ul className="small">
-            <li>One upload → every tunnel reconstructed and risk-ranked</li>
-            <li>YAML policy pack + behavioural anomaly model with SHAP explanations</li>
-            <li>Findings mapped to MITRE ATT&amp;CK with concrete remediation</li>
-            <li>Audit-ready PDF plus JSON / syslog export for SIEM</li>
-          </ul>
-        </div>
-      </div>
-
-      <div className="card">
-        <h2>Pipeline</h2>
-        <Pipeline stage={running ? (running.status === "queued" ? "capture" : running.stage) : null} />
-        {running && running.status !== "failed" && (
-          <p className="small muted" role="status" style={{ margin: "10px 0 0" }}>
-            <span className="spinner" /> {running.filename}: {running.stage}…
-          </p>
-        )}
-      </div>
+      </header>
 
       {error && <ErrorBox error={error} retry={() => setError(null)} />}
 
-      <div className="grid g2">
-        <div className="card">
-          <h2>Analyze a capture</h2>
-          <div className={`drop ${over ? "over" : ""}`} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
-            {pcap ? <b>{pcap.name}</b> : <span className="muted">Drop a .pcap / .pcapng here</span>}
-            <div style={{ marginTop: 10 }}>
-              <label className="btn">
-                Choose capture…
-                <input type="file" accept=".pcap,.pcapng,.cap" hidden onChange={(e) => setPcap(e.target.files?.[0] ?? null)} />
-              </label>
-            </div>
-          </div>
-          <p className="small muted" style={{ margin: "10px 0 6px" }}>
-            Optional: IKEv2 decryption keys (Wireshark <code>ikev2_decryption_table</code> format). Without them IKEv2 authentication and child SAs
-            are encrypted and reported as <i>not assessable</i>.
-          </p>
-          <div className="row">
+      <div className="az-work">
+        <section className="az-primary" aria-label="Analyze a capture">
+          <div className={`az-drop ${over ? "over" : ""}`} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5m0 0l-4 4m4-4l4 4M5 19h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            {pcap ? <b className="mono az-file">{pcap.name}</b> : <span>Drop a .pcap / .pcapng here</span>}
             <label className="btn">
-              {keys ? keys.name : "Add key file…"}
-              <input type="file" hidden onChange={(e) => setKeys(e.target.files?.[0] ?? null)} />
+              {pcap ? "Choose a different capture…" : "Choose capture…"}
+              <input type="file" accept=".pcap,.pcapng,.cap" hidden onChange={(e) => setPcap(e.target.files?.[0] ?? null)} />
             </label>
-            <button className="primary" disabled={!pcap || busy} onClick={() => pcap && start(() => api.upload(pcap, keys))}>
-              Analyze
+          </div>
+          <div className="az-actions">
+            <div className="az-keys">
+              <label className="btn">
+                {keys ? keys.name : "Add key file…"}
+                <input type="file" hidden onChange={(e) => setKeys(e.target.files?.[0] ?? null)} />
+              </label>
+              <p className="small muted">
+                Optional IKEv2 decryption keys (Wireshark <code>ikev2_decryption_table</code>). Without them IKEv2 authentication and child SAs
+                are reported as <i>not assessable</i>.
+              </p>
+            </div>
+            <button className="primary az-go" disabled={!pcap || busy} onClick={() => pcap && start(() => api.upload(pcap, keys))}>
+              Analyze capture →
             </button>
           </div>
-        </div>
+          {running && running.status !== "failed" && (
+            <p className="small az-status" role="status"><span className="spinner" /> {running.filename}: {running.stage}…</p>
+          )}
+        </section>
 
-        <div className="card">
-          <h2>Or use a bundled capture</h2>
+        <section className="az-samples" aria-label="Bundled captures">
+          <h2>Or try a bundled capture</h2>
           {samples == null && !error ? <Loading what="Loading samples" /> : samples && samples.length === 0 ? (
             <Empty>No bundled captures found. Run <code>python -m synth.generate</code>.</Empty>
           ) : (
-            <div className="stack">
+            <ul tabIndex={0} aria-label="Bundled captures list">
               {samples?.map((s) => (
-                <div key={s.name} className="row spread" style={{ alignItems: "flex-start" }}>
-                  <div>
-                    <b className="mono">{s.name}</b> <Prov p={s.provenance} />
-                    <div className="small muted">{s.description}</div>
+                <li key={s.name}>
+                  <div className="name"><b className="mono">{s.name}</b><Prov p={s.provenance} /></div>
+                  <div className="desc small muted" title={s.description}>{s.description}</div>
+                  <div className="meta">
+                    {s.has_keys && <span className="chip" title="A decryption key file ships with this capture">decryption keys included</span>}
                   </div>
-                  <button disabled={busy} onClick={() => start(() => api.analyzeSample(s.name))}>Analyze</button>
-                </div>
+                  <button disabled={busy} onClick={() => start(() => api.analyzeSample(s.name))} aria-label={`Analyze ${s.name}`}>Analyze →</button>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
-        </div>
+        </section>
       </div>
 
-      <div className="card">
+      <section className="az-pipeline" aria-label="How it works">
+        <Pipeline stage={running ? (running.status === "queued" ? "capture" : running.stage) : null} />
+      </section>
+
+      <section className="az-recent">
         <h2>Recent analyses</h2>
         {history.length === 0 ? <Empty>Nothing analysed yet.</Empty> : (
           <div className="tablewrap">
@@ -172,7 +149,7 @@ export default function Analyze() {
             </table>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

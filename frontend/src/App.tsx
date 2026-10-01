@@ -40,8 +40,8 @@ export default function App() {
           IPsec VPN Analyzer
         </a>
         <nav className="nav" aria-label="Main">
-          <a href="#/" className={active === "analyze" ? "active" : ""}>Analyze</a>
-          <a href="#/eval" className={active === "eval" ? "active" : ""}>Evaluation</a>
+          <a href="#/" className={active === "analyze" ? "active" : ""} aria-current={active === "analyze" ? "page" : undefined}>Analyze</a>
+          <a href="#/eval" className={active === "eval" ? "active" : ""} aria-current={active === "eval" ? "page" : undefined}>Evaluation</a>
         </nav>
         <span className="muted small">SIH26160 · prototype</span>
       </header>

@@ -1,0 +1,97 @@
+/* Design tokens: typography and spacing. Colors live in styles.css (:root) and are unchanged. */
+
+/* ---- Fonts: self-hosted variable fonts (Latin subset) from /public/fonts, preloaded in index.html.
+   font-display: swap + metric-adjusted fallback faces keep the swap from shifting layout. ---- */
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-latin-wght-normal.woff2") format("woff2-variations");
+}
+@font-face {
+  font-family: "JetBrains Mono Variable";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations");
+}
+@font-face {
+  font-family: "Inter Fallback";
+  src: local("Arial"), local("Helvetica Neue"), local("Segoe UI");
+  size-adjust: 107.4%;
+  ascent-override: 90.2%;
+  descent-override: 22.5%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "JetBrains Mono Fallback";
+  src: local("Consolas");
+  size-adjust: 109%;
+  ascent-override: 93.6%;
+  descent-override: 27.5%;
+  line-gap-override: 0%;
+}
+
+:root {
+  /* families */
+  --font-sans: "Inter Variable", "Inter Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono Fallback", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  /* type scale: 12 · 13 · 14 · 16 · 20 · 24-28 (fluid) · 32 */
+  --fs-meta: 12px;     /* badges, table headers, chips, eyebrows, timestamps */
+  --fs-ui: 13px;       /* buttons, descriptions, helper text, mono identifiers */
+  --fs-body: 14px;     /* body copy, table cells, nav */
+  --fs-h3: 16px;       /* card / panel titles, brand */
+  --fs-h2: 20px;       /* KPI values, mono page titles (tunnel, capture) */
+  --fs-h1: clamp(22px, 1.6vw + 14px, 28px);  /* page title, scales with viewport */
+  --fs-display: 32px;  /* risk score on the tunnel detail page */
+  --fs-hero: clamp(40px, 2vw + 20px, 48px);  /* the one dominant number on the results page */
+
+  /* line-height per size: tight for headings, open for body */
+  --lh-display: 1;
+  --lh-h1: 1.15;
+  --lh-h2: 1.25;
+  --lh-h3: 1.35;
+  --lh-body: 1.55;
+  --lh-ui: 1.5;
+  --lh-meta: 1.35;
+
+  /* tracking per size */
+  --ls-h1: -0.022em;
+  --ls-h2: -0.015em;
+  --ls-h3: -0.011em;
+  --ls-label: 0.06em;  /* uppercase labels only */
+
+  /* weights (variable fonts: real intermediate weights) */
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* spacing scale: 4px base unit */
+  --sp-0: 2px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+  --sp-8: 40px;
+  --sp-9: 48px;
+  --sp-10: 64px;
+
+  /* density: tighter on phones, more generous on large screens */
+  --gutter: var(--sp-4);
+  --pad-card: var(--sp-4);
+  --gap-block: var(--sp-3);    /* between siblings inside a section */
+  --gap-section: var(--sp-6);  /* between sections */
+  --gap-focus: var(--sp-6);    /* around the primary action */
+}
+@media (min-width: 640px) {
+  :root { --gutter: var(--sp-6); --pad-card: var(--sp-5); --gap-block: var(--sp-4); --gap-section: var(--sp-7); --gap-focus: var(--sp-6); }
+}
+@media (min-width: 1024px) {
+  :root { --gutter: var(--sp-7); --pad-card: var(--sp-6); --gap-section: var(--sp-7); --gap-focus: var(--sp-7); }
+}
