@@ -58,7 +58,7 @@ def _v1_suites(msg: IkeMessage) -> list[Suite]:
             out.append(Suite(
                 encr=C.V1_ENC.get(a.get(C.A1_ENC), f"ENC_{a.get(C.A1_ENC)}") if C.A1_ENC in a else None,
                 encr_bits=a.get(C.A1_KEYLEN),
-                integ=C.V1_HASH.get(a.get(C.A1_HASH), f"HASH_{a.get(C.A1_HASH)}") if C.A1_HASH in a else None,
+                integ=C.V1_HASH_ALGORITHMS.get(a.get(C.A1_HASH), f"HASH_{a.get(C.A1_HASH)}") if C.A1_HASH in a else None,
                 dh=C.DH_GROUP.get(a.get(C.A1_GROUP), f"GROUP_{a.get(C.A1_GROUP)}") if C.A1_GROUP in a else None,
                 auth=C.V1_AUTH.get(a.get(C.A1_AUTH), f"AUTH_{a.get(C.A1_AUTH)}") if C.A1_AUTH in a else None,
                 lifetime_s=life,

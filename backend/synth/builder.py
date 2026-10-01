@@ -24,7 +24,7 @@ _PRF_ID = {v: k for k, v in C.PRF.items()}
 _INTEG_ID = {v: k for k, v in C.INTEG.items()}
 _DH_ID = {v: k for k, v in C.DH_GROUP.items()}
 _V1_ENC_ID = {v: k for k, v in C.V1_ENC.items()}
-_V1_HASH_ID = {v: k for k, v in C.V1_HASH.items()}
+_V1_HASH_ID = {v: k for k, v in C.V1_HASH_ALGORITHMS.items()}
 _V1_AUTH_ID = {v: k for k, v in C.V1_AUTH.items()}
 
 _HASH = {"HMAC_MD5_96": (hashlib.md5, 12, 16), "HMAC_SHA1_96": (hashlib.sha1, 12, 20),
