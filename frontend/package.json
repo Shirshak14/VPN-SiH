@@ -3,7 +3,8 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "scripts": { "dev": "vite", "build": "tsc --noEmit && vite build", "preview": "vite preview" },
+  "engines": { "node": ">=20" },
+  "scripts": { "dev": "vite", "build": "tsc --noEmit && vite build", "preview": "vite preview", "e2e": "node e2e/smoke.mjs" },
   "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" },
   "devDependencies": {
     "@types/react": "^18.3.3",

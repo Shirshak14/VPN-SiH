@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 def _startup() -> None:
     init_db()
     service.get_engine()  # fail fast on a malformed policy pack
+    threading.Thread(target=service.warm_up, name="warm-up", daemon=True).start()  # first analysis then runs warm
 
 
 def db() -> Session:

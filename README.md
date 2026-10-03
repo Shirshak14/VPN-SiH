@@ -31,9 +31,13 @@ Consequences you should state if asked:
 
 ## Quick start (local, no Docker)
 
+Prerequisites: **Python 3.11** (its `venv` must include pip: if `python -m venv` fails at `ensurepip`, as with some uv-managed builds, use
+`uv venv --python 3.11 --seed .venv` instead) and **Node 20+**. Ports **8000** (API) and **5173** (UI) must be free: the Vite dev server proxies `/api` to `localhost:8000`.
+
 ```bash
 python -m venv .venv            # Python 3.11 recommended (3.14 lacks wheels for some deps)
-.venv/Scripts/pip install -r backend/requirements.txt      # Linux/macOS: .venv/bin/pip
+# constraints.txt pins every package to the exact versions this project was tested with
+.venv/Scripts/pip install -r backend/requirements.txt -c backend/constraints.txt   # Linux/macOS: .venv/bin/pip
 cd backend
 python -m synth.generate --out ../data/captures --benign-per-family 40   # ~1 min, deterministic (seed 2026)
 python -m ipsec_analyzer.ml.train                                        # retrain anomaly model (benign train split only)
@@ -41,10 +45,28 @@ python -m ipsec_analyzer.evaluation                                      # regen
 python -m pytest tests -q
 uvicorn ipsec_analyzer.api.main:app --port 8000                          # SQLite by default
 # second terminal
-cd frontend && npm install && npm run dev                                # http://localhost:5173
+cd frontend && npm ci && npm run dev                                     # http://localhost:5173
+```
+
+`npm ci` may print a harmless warning that esbuild's postinstall script is not pre-approved; the build works regardless.
+
+**UI smoke test.** With the API and the UI running, `cd frontend && npm run e2e` drives a real browser through upload, a bundled scenario, the results page, a tunnel, and the Evaluation page,
+checking every figure against the API (needs Node 22+ and Chrome, Chromium or Edge; it deletes the analyses it creates).
+
+**About `docs/EVAL.json`.** Regenerating it rewrites two run-dependent fields, `generated_at` and `throughput` (packets/s varies from run to run), so the file shows as modified even when nothing changed.
+The Evaluation page displays both, so they stay in the file. To check that the *metrics* reproduce, compare everything else:
+
+```bash
+python - <<'EOF'
+import json, subprocess
+strip = lambda d: {k: v for k, v in d.items() if k not in ("generated_at", "throughput")}
+old = json.loads(subprocess.check_output(["git", "show", "HEAD:docs/EVAL.json"]))
+print("metrics identical:", strip(json.load(open("../docs/EVAL.json"))) == strip(old))
+EOF
 ```
 
 Full stack (PostgreSQL + API + nginx UI): `docker compose up --build` → http://localhost:8080. Verified: stack builds, an analysis of a real-lab capture ran through nginx into PostgreSQL, and the PDF/syslog exports download.
+The UI container starts only once the API's healthcheck passes, so the page never shows a gateway error while the API boots (first start takes a minute or so). Database credentials default to the demo values and can be overridden with `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` (set them before the first `up`, since an existing `pgdata` volume keeps its original credentials).
 
 Optional: `DATABASE_URL=postgresql+psycopg2://…` to use PostgreSQL, `POLICY_PATH=/path/to/custom.yaml` for a different policy pack.
 

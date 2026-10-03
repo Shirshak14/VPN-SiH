@@ -37,7 +37,6 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  health: () => req<Json>("/api/health"),
   samples: () => req<Sample[]>("/api/samples"),
   analyses: () => req<Analysis[]>("/api/analyses"),
   analysis: (id: number) => req<Analysis>(`/api/analyses/${id}`),

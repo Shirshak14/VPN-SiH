@@ -9,7 +9,7 @@ from typing import Any
 from ..ml.model import DEFAULT_MODEL, AnomalyModel
 from ..pipeline import AnalysisResult, TunnelResult, analyze
 from ..rules import RuleEngine
-from .db import Analysis, SessionLocal, TunnelRow
+from .db import DATA_DIR, Analysis, SessionLocal, TunnelRow
 
 _engine: RuleEngine | None = None
 _model: AnomalyModel | None = None
@@ -28,6 +28,23 @@ def get_model() -> AnomalyModel | None:
     if _model is None and Path(DEFAULT_MODEL).exists():
         _model = AnomalyModel.load(DEFAULT_MODEL, get_engine())
     return _model
+
+
+def warm_up() -> None:
+    """Pay the one-off costs (model load, SHAP explainers, first-use code paths) before the first user request.
+
+    Runs the real pipeline once on a bundled capture and discards the result: nothing is stored. Best effort only, so
+    a missing capture or model never affects the API.
+    """
+    try:
+        model = get_model()
+        pcap = DATA_DIR / "captures" / "synthetic" / "demo_gateway_audit.pcap"
+        if model is None or not pcap.exists():
+            return
+        keys = pcap.with_suffix(".keys")
+        analyze(pcap, keys if keys.exists() else None, get_engine(), model)
+    except Exception:  # noqa: BLE001 - warm-up must never break the API
+        traceback.print_exc()
 
 
 def tunnel_payload(r: TunnelResult) -> dict[str, Any]:
