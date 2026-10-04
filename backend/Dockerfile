@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 WORKDIR /app/backend
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/requirements.txt backend/constraints.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
 COPY backend/ /app/backend/
 COPY docs/ /app/docs/
 COPY data/public/ /app/data/public/

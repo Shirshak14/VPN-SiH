@@ -1,16 +1,29 @@
+# Credentials default to the demo values below; override them with an .env file or exported variables
+# (avoid characters that need URL-encoding in POSTGRES_PASSWORD: it is placed inside DATABASE_URL).
 services:
   db:
     image: postgres:16-alpine
-    environment: { POSTGRES_USER: analyzer, POSTGRES_PASSWORD: analyzer, POSTGRES_DB: analyzer }
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-analyzer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-analyzer}
+      POSTGRES_DB: ${POSTGRES_DB:-analyzer}
     volumes: [pgdata:/var/lib/postgresql/data]
-    healthcheck: { test: ["CMD-SHELL", "pg_isready -U analyzer"], interval: 3s, retries: 20 }
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"], interval: 3s, retries: 20 }
   api:
     build: { context: ., dockerfile: backend/Dockerfile }
-    environment: { DATABASE_URL: "postgresql+psycopg2://analyzer:analyzer@db:5432/analyzer" }
+    environment:
+      DATABASE_URL: "postgresql+psycopg2://${POSTGRES_USER:-analyzer}:${POSTGRES_PASSWORD:-analyzer}@db:5432/${POSTGRES_DB:-analyzer}"
     depends_on: { db: { condition: service_healthy } }
+    # The web container waits for this, so nginx never answers 502 while the API is still starting.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health', timeout=3).status == 200 else 1)"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 10s
   web:
     build: { context: ., dockerfile: frontend/Dockerfile }
     ports: ["8080:80"]
-    depends_on: [api]
+    depends_on: { api: { condition: service_healthy } }
 volumes:
   pgdata:

@@ -53,7 +53,9 @@ def _v1_label(spec_label: str) -> str:
     return "/".join([V2_ENCR_TO_V1[e] + (f"-{bits}" if bits else ""), V2_INTEG_TO_V1[integ], dh])
 
 
-def evaluate_synthetic(manifest_path: Path, model: AnomalyModel | None, use_keys: bool = True) -> dict[str, Any]:
+def evaluate_synthetic(manifest_path: Path, model: AnomalyModel | None, use_keys: bool = True,
+                       keyless_cache: dict[str, Any] | None = None) -> dict[str, Any]:
+    """`keyless_cache` lets two runs share results for captures that have no key file (identical with or without keys)."""
     root = manifest_path.parent
     manifest = json.loads(manifest_path.read_text())
     engine = RuleEngine()
@@ -74,7 +76,12 @@ def evaluate_synthetic(manifest_path: Path, model: AnomalyModel | None, use_keys
         if m["split"] in ("train", "demo"):
             continue  # held-out test split only
         keys = root / m["keys"] if (use_keys and m.get("keys")) else None
-        res = analyze(root / m["file"], keys, engine, model)
+        if keys is None and keyless_cache is not None and m["file"] in keyless_cache:
+            res = keyless_cache[m["file"]]
+        else:
+            res = analyze(root / m["file"], keys, engine, model)
+            if keys is None and keyless_cache is not None:
+                keyless_cache[m["file"]] = res
         by = {r.tunnel.ispi: r for r in res.tunnels}
         chk("ike_datagrams_parsed", res.capture.stats.ike_messages == sum(t["ike_datagrams"] for t in m["tunnels"]))
         chk("esp_packets_parsed", res.capture.stats.esp_packets == sum(t["esp_datagrams"] for t in m["tunnels"]))
@@ -185,9 +192,11 @@ def validate_public(public_dir: Path) -> dict[str, Any]:
         add("ikev2_decrypt_auth_bytes_match_wireshark", f, oracle["auth_data"] in got)
         sc = sum(1 for p in rdpcap(str(public_dir / f)) if p.haslayer(ISAKMP))
         add("ike_message_count_matches_scapy", f, cap.stats.ike_messages == sc, f"ours={cap.stats.ike_messages} scapy={sc}")
+    loaded: dict[str, tuple[Any, Any]] = {}  # file -> (our parse, scapy packets), shared with the IKEv1 attribute check below
     for f in man["ikev1"] + man["esp"]:
         cap = parse_pcap(public_dir / f)
         pk = rdpcap(str(public_dir / f))
+        loaded[f] = (cap, pk)
         sc_ike = sum(1 for p in pk if p.haslayer(ISAKMP))
         add("ike_message_count_matches_scapy", f, cap.stats.ike_messages == sc_ike, f"ours={cap.stats.ike_messages} scapy={sc_ike}")
         sc_esp = sum(1 for p in pk if p.haslayer(ESP))
@@ -195,9 +204,9 @@ def validate_public(public_dir: Path) -> dict[str, Any]:
     # IKEv1 transform attributes vs Scapy's independent ISAKMP dissector
     from scapy.layers.isakmp import ISAKMPAttributeTypes as T  # name -> (attribute id, {label: value})
     for f in man["ikev1"]:
-        cap = parse_pcap(public_dir / f)
+        cap, pk = loaded[f]
         ours = [m for m in cap.ike if m.clear.v1_proposals]
-        theirs = [p for p in rdpcap(str(public_dir / f)) if p.haslayer(ISAKMP_payload_SA)]
+        theirs = [p for p in pk if p.haslayer(ISAKMP_payload_SA)]
         ok = len(ours) == len(theirs)
         for m, p in zip(ours, theirs):
             a = m.clear.v1_proposals[0].transforms[0].attrs
@@ -250,6 +259,7 @@ def measure_throughput(manifest_path: Path) -> dict[str, Any]:
 
 def run(manifest_path: Path, public_dir: Path, model_path: Path) -> dict[str, Any]:
     model = AnomalyModel.load(model_path)
+    keyless: dict[str, Any] = {}  # analyses of captures without a key file, shared by the two synthetic runs
     man = json.loads(manifest_path.read_text())
     labels: dict[str, int] = defaultdict(int)
     for m in man.values():
@@ -259,8 +269,8 @@ def run(manifest_path: Path, public_dir: Path, model_path: Path) -> dict[str, An
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "alert_threshold_risk": ALERT_RISK,
         "corpus": {"captures": len(man), "tunnels_by_label": dict(labels), "provenance": "synthetic (see README)"},
-        "synthetic": evaluate_synthetic(manifest_path, model, use_keys=True),
-        "synthetic_no_keys": evaluate_synthetic(manifest_path, model, use_keys=False),
+        "synthetic": evaluate_synthetic(manifest_path, model, use_keys=True, keyless_cache=keyless),
+        "synthetic_no_keys": evaluate_synthetic(manifest_path, model, use_keys=False, keyless_cache=keyless),
         "real_public": validate_public(public_dir),
         "real_lab": evaluate_lab(manifest_path.parent / "lab", model),
         "throughput": measure_throughput(manifest_path),

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -23,14 +23,11 @@ class TunnelResult:
 
 @dataclass
 class AnalysisResult:
-    path: str
     tunnels: list[TunnelResult]
     reconstruction: Reconstruction
     capture: ParsedCapture
     policy_name: str
     seconds: float
-    key_file: str | None = None
-    notes: list[str] = field(default_factory=list)
 
 
 def analyze(pcap: str | Path, keys: str | Path | None = None, engine: RuleEngine | None = None,
@@ -51,5 +48,4 @@ def analyze(pcap: str | Path, keys: str | Path | None = None, engine: RuleEngine
         risk = score_tunnel(findings, anomaly["score"] if anomaly else None, engine.policy)
         results.append(TunnelResult(t, findings, risk, anomaly))
     results.sort(key=lambda r: r.risk.score, reverse=True)
-    return AnalysisResult(str(pcap), results, rec, cap, engine.policy.name, time.perf_counter() - t0,
-                          str(keys) if keys else None)
+    return AnalysisResult(results, rec, cap, engine.policy.name, time.perf_counter() - t0)
