@@ -18,9 +18,9 @@ FEATURES: list[tuple[str, str]] = [
     ("mean_msg_bytes", "Mean IKE message size (B)"),
     ("first_msg_bytes", "First handshake message size (B)"),
     ("handshake_bytes", "Handshake bytes (B)"),
-    ("first_rtt_ms", "First request→response latency (ms)"),
-    ("mean_hs_gap_ms", "Mean inter-message gap in handshake (ms)"),
-    ("max_hs_gap_ms", "Max inter-message gap in handshake (ms)"),
+    ("first_rtt_ms", "First request→response turnaround (ms)"),
+    ("mean_hs_gap_ms", "Mean handshake turnaround (ms)"),
+    ("max_hs_gap_ms", "Max handshake turnaround (ms)"),
     ("retransmits", "Retransmitted IKE messages"),
     ("max_retransmit_streak", "Longest retransmit streak"),
     ("cookie_challenges", "Cookie challenges"),
@@ -29,6 +29,7 @@ FEATURES: list[tuple[str, str]] = [
     ("best_offered_rank", "Best offered suite policy rank (0-3)"),
     ("rank_drop", "Offered→chosen rank drop"),
     ("failed_prior_attempts", "Earlier failed attempts (same peers)"),
+    ("half_open_peers", "Unanswered handshakes from the same source / to the same target (±5 min)"),
     ("incomplete", "Handshake incomplete"),
     ("create_child_per_min", "CREATE_CHILD_SA / Quick Mode rate (per min)"),
     ("dpd_messages", "Liveness (DPD) messages"),
@@ -48,11 +49,28 @@ FEATURE_LABELS = dict(FEATURES)
 _HS = ("IKE_SA_INIT", "IKE_AUTH", "Identity Protection", "Aggressive Mode")
 
 
+def turnarounds_ms(t: Tunnel) -> list[float]:
+    """Delay between the *last transmission* of a message and the answer that flips direction.
+
+    A retransmit restarts the clock, so a lost first packet (retransmit timer, typically 0.5 s+) is not mistaken
+    for a slow peer: what remains is how long the other side (or a relay in between) took to answer.
+    """
+    out: list[float] = []
+    direction, last_ts = None, 0.0  # direction and timestamp of the latest transmission in the current run
+    for e in t.timeline:
+        if direction is None or e.direction == direction:
+            direction, last_ts = e.direction, e.ts
+        elif not e.retransmit:
+            if e.label.startswith(_HS):
+                out.append((e.ts - last_ts) * 1000)
+            direction, last_ts = e.direction, e.ts
+    return out
+
+
 def extract(t: Tunnel, engine: RuleEngine) -> dict[str, float]:
     ev = [e for e in t.timeline if not e.retransmit]
-    hs = [e for e in ev if e.label.startswith(_HS)]
-    gaps = [(b.ts - a.ts) * 1000 for a, b in zip(hs, hs[1:])]
-    first_rtt = (ev[1].ts - ev[0].ts) * 1000 if len(ev) > 1 else 0.0
+    gaps = turnarounds_ms(t)
+    first_rtt = gaps[0] if gaps else 0.0
     n_ike = max(t.msg_count, 1)
     offered = [engine.suite_rank(s) for s in t.offered]
     offered = [r for r in offered if r is not None]
@@ -83,6 +101,7 @@ def extract(t: Tunnel, engine: RuleEngine) -> dict[str, float]:
         "best_offered_rank": float(best),
         "rank_drop": float(max(best - ch, 0)),
         "failed_prior_attempts": float(sum(1 for p in t.prior_attempts if p.status == "failed")),
+        "half_open_peers": float(t.half_open_peers),
         "incomplete": float(t.status == "incomplete"),
         "create_child_per_min": t.create_child_exchanges / (dur / 60.0) if dur > 1 else 0.0,
         "dpd_messages": float(t.dpd_messages),

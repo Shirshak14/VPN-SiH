@@ -115,6 +115,7 @@ class Tunnel:
     timeline: list[TimelineEvent] = field(default_factory=list)
     esp_flows: list[EspFlow] = field(default_factory=list)
     prior_attempts: list[AttemptSummary] = field(default_factory=list)
+    half_open_peers: int = 0  # unanswered handshakes from the same initiator or to the same responder (incl. this one), +-5 min
     msg_count: int = 0
     handshake_bytes: int = 0
     handshake_duration_s: float = 0.0

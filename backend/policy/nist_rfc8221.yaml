@@ -37,6 +37,7 @@ thresholds:
   # Site-policy knobs (not fixed by NIST/RFC text) -- adjust to your environment.
   max_ike_lifetime_s: 86400        # IKEv1 phase-1 lifetime above this is flagged
   retransmit_alert: 3              # retransmitted handshake messages in one tunnel
+  half_open_alert: 5               # unanswered IKE handshakes from one source (or to one target) within +-5 min
   esp_replay_ratio: 0.01           # fraction of ESP packets with seq <= highest seen
   esp_gap_ratio: 0.05              # fraction of missing ESP sequence numbers
   esp_min_packets: 20              # do not judge ESP sequencing on shorter flows
@@ -181,6 +182,19 @@ rules:
     mitre: []
     remediation: REM-CHECK-PATH
 
+  - id: IKE-HALF-OPEN-FLOOD
+    title: Burst of unanswered IKE handshakes
+    check: half_open
+    params: {}
+    severity: medium
+    description: >-
+      Many IKE_SA_INIT / Phase-1 requests from one source (or to one responder) were never answered. That pattern
+      is typical of VPN-gateway discovery scans and half-open exhaustion attempts; each one can make the responder
+      allocate state and run a Diffie-Hellman computation.
+    refs: ["RFC 7296 §2.6 (cookies)", "RFC 8019 (IKEv2 DoS protection)"]
+    mitre: [T1595, T1499]
+    remediation: REM-RATE-LIMIT-IKE
+
   - id: ESP-SEQ-REPLAY
     title: ESP sequence numbers repeat or go backwards
     check: esp_replay
@@ -269,6 +283,15 @@ remediations:
     title: Investigate handshake or ESP loss
     steps:
       - Check for path MTU/fragmentation problems, rate limiting of UDP/500/4500, or an on-path device dropping packets.
+  REM-RATE-LIMIT-IKE:
+    title: Rate-limit and cookie-protect IKE_SA_INIT
+    steps:
+      - Enable IKEv2 cookies under load (strongSwan `charon.dos_protection`, `cookie_threshold`) and cap half-open SAs per source (`block_threshold`).
+      - Restrict UDP/500 and UDP/4500 to known peer addresses at the edge firewall where the peer set is fixed.
+      - Alert on the source addresses listed in the evidence; a sweep across many responders points to scanning rather than a misconfigured peer.
+    example: |
+      # strongSwan strongswan.conf
+      charon { dos_protection = yes  cookie_threshold = 10  block_threshold = 5 }
   REM-CHECK-REPLAY:
     title: Investigate ESP replay
     steps:
@@ -280,3 +303,5 @@ mitre_catalog:               # curated -- real ATT&CK Enterprise technique IDs
   T1557:     {name: "Adversary-in-the-Middle", tactic: "Credential Access / Collection", url: "https://attack.mitre.org/techniques/T1557/"}
   T1110.002: {name: "Brute Force: Password Cracking", tactic: "Credential Access", url: "https://attack.mitre.org/techniques/T1110/002/"}
   T1600:     {name: "Weaken Encryption", tactic: "Defense Evasion", url: "https://attack.mitre.org/techniques/T1600/"}
+  T1595:     {name: "Active Scanning", tactic: "Reconnaissance", url: "https://attack.mitre.org/techniques/T1595/"}
+  T1499:     {name: "Endpoint Denial of Service", tactic: "Impact", url: "https://attack.mitre.org/techniques/T1499/"}

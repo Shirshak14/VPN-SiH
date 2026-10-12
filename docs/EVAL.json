@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-09-30T17:37:46+00:00",
+ "generated_at": "2026-10-12T17:28:24+00:00",
  "alert_threshold_risk": 15.0,
  "corpus": {
   "captures": 309,
@@ -16,34 +16,34 @@
   "tunnels_evaluated": 168,
   "detection": {
    "combined": {
-    "tp": 91,
-    "fp": 2,
-    "fn": 17,
-    "tn": 58,
-    "precision": 0.978494623655914,
-    "recall": 0.8425925925925926,
-    "f1": 0.9054726368159204,
-    "false_positive_rate": 0.03333333333333333
+    "tp": 107,
+    "fp": 3,
+    "fn": 1,
+    "tn": 57,
+    "precision": 0.9727272727272728,
+    "recall": 0.9907407407407407,
+    "f1": 0.981651376146789,
+    "false_positive_rate": 0.05
    },
    "rules": {
-    "tp": 78,
+    "tp": 84,
     "fp": 0,
-    "fn": 30,
+    "fn": 24,
     "tn": 60,
     "precision": 1.0,
-    "recall": 0.7222222222222222,
-    "f1": 0.8387096774193548,
+    "recall": 0.7777777777777778,
+    "f1": 0.8750000000000001,
     "false_positive_rate": 0.0
    },
    "ml": {
-    "tp": 18,
-    "fp": 2,
-    "fn": 90,
-    "tn": 58,
-    "precision": 0.9,
-    "recall": 0.16666666666666666,
-    "f1": 0.28125,
-    "false_positive_rate": 0.03333333333333333
+    "tp": 34,
+    "fp": 3,
+    "fn": 74,
+    "tn": 57,
+    "precision": 0.918918918918919,
+    "recall": 0.3148148148148148,
+    "f1": 0.46896551724137936,
+    "false_positive_rate": 0.05
    }
   },
   "per_family": {
@@ -55,9 +55,9 @@
    },
    "a_half_open_scan": {
     "n": 6,
-    "combined": 1,
-    "rules": 0,
-    "ml": 1
+    "combined": 6,
+    "rules": 6,
+    "ml": 6
    },
    "a_oversize_handshake": {
     "n": 6,
@@ -73,15 +73,15 @@
    },
    "a_retransmit_burst": {
     "n": 6,
-    "combined": 1,
+    "combined": 6,
     "rules": 0,
-    "ml": 1
+    "ml": 6
    },
    "a_slow_relay": {
     "n": 6,
-    "combined": 0,
+    "combined": 6,
     "rules": 0,
-    "ml": 0
+    "ml": 6
    },
    "b_acceptable": {
     "n": 12,
@@ -109,9 +109,9 @@
    },
    "b_v1_strong": {
     "n": 12,
-    "combined": 1,
+    "combined": 2,
     "rules": 0,
-    "ml": 1
+    "ml": 2
    },
    "d_dh_only": {
     "n": 6,
@@ -187,7 +187,7 @@
    }
   },
   "rule_level": {
-   "tp": 282,
+   "tp": 288,
    "fp": 0,
    "fn": 0,
    "tn": 0,
@@ -233,6 +233,11 @@
     },
     "IKE-ENC-WEAK": {
      "tp": 31,
+     "fp": 0,
+     "fn": 0
+    },
+    "IKE-HALF-OPEN-FLOOD": {
+     "tp": 6,
      "fp": 0,
      "fn": 0
     },
@@ -302,89 +307,9 @@
   },
   "missed": [
    {
-    "capture": "a_half_open_scan_00",
-    "family": "a_half_open_scan",
-    "risk": 16.6
-   },
-   {
-    "capture": "a_half_open_scan_01",
-    "family": "a_half_open_scan",
-    "risk": 11.2
-   },
-   {
-    "capture": "a_half_open_scan_03",
-    "family": "a_half_open_scan",
-    "risk": 16.6
-   },
-   {
-    "capture": "a_half_open_scan_04",
-    "family": "a_half_open_scan",
-    "risk": 11.2
-   },
-   {
-    "capture": "a_half_open_scan_05",
-    "family": "a_half_open_scan",
-    "risk": 17.0
-   },
-   {
     "capture": "a_rekey_storm_05",
     "family": "a_rekey_storm",
     "risk": 9.3
-   },
-   {
-    "capture": "a_retransmit_burst_00",
-    "family": "a_retransmit_burst",
-    "risk": 19.0
-   },
-   {
-    "capture": "a_retransmit_burst_01",
-    "family": "a_retransmit_burst",
-    "risk": 19.0
-   },
-   {
-    "capture": "a_retransmit_burst_03",
-    "family": "a_retransmit_burst",
-    "risk": 19.0
-   },
-   {
-    "capture": "a_retransmit_burst_04",
-    "family": "a_retransmit_burst",
-    "risk": 19.9
-   },
-   {
-    "capture": "a_retransmit_burst_05",
-    "family": "a_retransmit_burst",
-    "risk": 19.0
-   },
-   {
-    "capture": "a_slow_relay_00",
-    "family": "a_slow_relay",
-    "risk": 14.8
-   },
-   {
-    "capture": "a_slow_relay_01",
-    "family": "a_slow_relay",
-    "risk": 13.8
-   },
-   {
-    "capture": "a_slow_relay_02",
-    "family": "a_slow_relay",
-    "risk": 13.8
-   },
-   {
-    "capture": "a_slow_relay_03",
-    "family": "a_slow_relay",
-    "risk": 13.8
-   },
-   {
-    "capture": "a_slow_relay_04",
-    "family": "a_slow_relay",
-    "risk": 13.8
-   },
-   {
-    "capture": "a_slow_relay_05",
-    "family": "a_slow_relay",
-    "risk": 12.8
    }
   ],
   "false_alarms": [
@@ -403,6 +328,15 @@
      "IKE-V1-LEGACY"
     ],
     "anomaly": 0.5409
+   },
+   {
+    "capture": "b_v1_strong_28",
+    "family": "b_v1_strong",
+    "risk": 23.4,
+    "rules": [
+     "IKE-V1-LEGACY"
+    ],
+    "anomaly": 0.6158
    }
   ]
  },
@@ -411,34 +345,34 @@
   "tunnels_evaluated": 168,
   "detection": {
    "combined": {
-    "tp": 80,
-    "fp": 2,
-    "fn": 28,
-    "tn": 58,
-    "precision": 0.975609756097561,
-    "recall": 0.7407407407407407,
-    "f1": 0.8421052631578947,
-    "false_positive_rate": 0.03333333333333333
+    "tp": 96,
+    "fp": 3,
+    "fn": 12,
+    "tn": 57,
+    "precision": 0.9696969696969697,
+    "recall": 0.8888888888888888,
+    "f1": 0.927536231884058,
+    "false_positive_rate": 0.05
    },
    "rules": {
-    "tp": 66,
+    "tp": 72,
     "fp": 0,
-    "fn": 42,
+    "fn": 36,
     "tn": 60,
     "precision": 1.0,
-    "recall": 0.6111111111111112,
-    "f1": 0.7586206896551725,
+    "recall": 0.6666666666666666,
+    "f1": 0.8,
     "false_positive_rate": 0.0
    },
    "ml": {
-    "tp": 18,
-    "fp": 2,
-    "fn": 90,
-    "tn": 58,
-    "precision": 0.9,
-    "recall": 0.16666666666666666,
-    "f1": 0.28125,
-    "false_positive_rate": 0.03333333333333333
+    "tp": 34,
+    "fp": 3,
+    "fn": 74,
+    "tn": 57,
+    "precision": 0.918918918918919,
+    "recall": 0.3148148148148148,
+    "f1": 0.46896551724137936,
+    "false_positive_rate": 0.05
    }
   },
   "per_family": {
@@ -450,9 +384,9 @@
    },
    "a_half_open_scan": {
     "n": 6,
-    "combined": 1,
-    "rules": 0,
-    "ml": 1
+    "combined": 6,
+    "rules": 6,
+    "ml": 6
    },
    "a_oversize_handshake": {
     "n": 6,
@@ -468,15 +402,15 @@
    },
    "a_retransmit_burst": {
     "n": 6,
-    "combined": 1,
+    "combined": 6,
     "rules": 0,
-    "ml": 1
+    "ml": 6
    },
    "a_slow_relay": {
     "n": 6,
-    "combined": 0,
+    "combined": 6,
     "rules": 0,
-    "ml": 0
+    "ml": 6
    },
    "b_acceptable": {
     "n": 12,
@@ -504,9 +438,9 @@
    },
    "b_v1_strong": {
     "n": 12,
-    "combined": 1,
+    "combined": 2,
     "rules": 0,
-    "ml": 1
+    "ml": 2
    },
    "d_dh_only": {
     "n": 6,
@@ -582,13 +516,13 @@
    }
   },
   "rule_level": {
-   "tp": 208,
+   "tp": 214,
    "fp": 0,
    "fn": 74,
    "tn": 0,
    "precision": 1.0,
-   "recall": 0.7375886524822695,
-   "f1": 0.8489795918367347,
+   "recall": 0.7430555555555556,
+   "f1": 0.852589641434263,
    "false_positive_rate": null,
    "per_rule": {
     "ESP-ENC-WEAK": {
@@ -628,6 +562,11 @@
     },
     "IKE-ENC-WEAK": {
      "tp": 31,
+     "fp": 0,
+     "fn": 0
+    },
+    "IKE-HALF-OPEN-FLOOD": {
+     "tp": 6,
      "fp": 0,
      "fn": 0
     },
@@ -687,89 +626,9 @@
   },
   "missed": [
    {
-    "capture": "a_half_open_scan_00",
-    "family": "a_half_open_scan",
-    "risk": 16.6
-   },
-   {
-    "capture": "a_half_open_scan_01",
-    "family": "a_half_open_scan",
-    "risk": 11.2
-   },
-   {
-    "capture": "a_half_open_scan_03",
-    "family": "a_half_open_scan",
-    "risk": 16.6
-   },
-   {
-    "capture": "a_half_open_scan_04",
-    "family": "a_half_open_scan",
-    "risk": 11.2
-   },
-   {
-    "capture": "a_half_open_scan_05",
-    "family": "a_half_open_scan",
-    "risk": 17.0
-   },
-   {
     "capture": "a_rekey_storm_05",
     "family": "a_rekey_storm",
     "risk": 9.3
-   },
-   {
-    "capture": "a_retransmit_burst_00",
-    "family": "a_retransmit_burst",
-    "risk": 19.0
-   },
-   {
-    "capture": "a_retransmit_burst_01",
-    "family": "a_retransmit_burst",
-    "risk": 19.0
-   },
-   {
-    "capture": "a_retransmit_burst_03",
-    "family": "a_retransmit_burst",
-    "risk": 19.0
-   },
-   {
-    "capture": "a_retransmit_burst_04",
-    "family": "a_retransmit_burst",
-    "risk": 19.9
-   },
-   {
-    "capture": "a_retransmit_burst_05",
-    "family": "a_retransmit_burst",
-    "risk": 19.0
-   },
-   {
-    "capture": "a_slow_relay_00",
-    "family": "a_slow_relay",
-    "risk": 14.8
-   },
-   {
-    "capture": "a_slow_relay_01",
-    "family": "a_slow_relay",
-    "risk": 13.8
-   },
-   {
-    "capture": "a_slow_relay_02",
-    "family": "a_slow_relay",
-    "risk": 13.8
-   },
-   {
-    "capture": "a_slow_relay_03",
-    "family": "a_slow_relay",
-    "risk": 13.8
-   },
-   {
-    "capture": "a_slow_relay_04",
-    "family": "a_slow_relay",
-    "risk": 13.8
-   },
-   {
-    "capture": "a_slow_relay_05",
-    "family": "a_slow_relay",
-    "risk": 12.8
    },
    {
     "capture": "w_esp_weak_00",
@@ -789,7 +648,7 @@
    {
     "capture": "w_esp_weak_03",
     "family": "w_esp_weak",
-    "risk": 6.0
+    "risk": 9.0
    },
    {
     "capture": "w_esp_weak_04",
@@ -804,7 +663,7 @@
    {
     "capture": "w_no_pfs_00",
     "family": "w_no_pfs",
-    "risk": 1.6
+    "risk": 1.8
    },
    {
     "capture": "w_no_pfs_01",
@@ -819,12 +678,12 @@
    {
     "capture": "w_no_pfs_04",
     "family": "w_no_pfs",
-    "risk": 5.7
+    "risk": 8.2
    },
    {
     "capture": "w_no_pfs_05",
     "family": "w_no_pfs",
-    "risk": 0.9
+    "risk": 2.2
    }
   ],
   "false_alarms": [
@@ -843,6 +702,15 @@
      "IKE-V1-LEGACY"
     ],
     "anomaly": 0.5409
+   },
+   {
+    "capture": "b_v1_strong_28",
+    "family": "b_v1_strong",
+    "risk": 23.4,
+    "rules": [
+     "IKE-V1-LEGACY"
+    ],
+    "anomaly": 0.6158
    }
   ]
  },
@@ -1096,64 +964,64 @@
    {
     "capture": "downgrade_retry_after_reject",
     "label": "downgrade",
-    "risk": 91.2,
-    "anomaly": 0.3024,
+    "risk": 91.4,
+    "anomaly": 0.3818,
     "extra_rules": [],
     "missing_rules": []
    },
    {
     "capture": "ok_aes128_sha256_curve25519",
     "label": "benign",
-    "risk": 8.3,
-    "anomaly": 0.2764,
+    "risk": 11.5,
+    "anomaly": 0.3818,
     "extra_rules": [],
     "missing_rules": []
    },
    {
     "capture": "ok_aes128_sha256_modp2048",
     "label": "benign",
-    "risk": 5.9,
-    "anomaly": 0.1976,
+    "risk": 7.5,
+    "anomaly": 0.2511,
     "extra_rules": [],
     "missing_rules": []
    },
    {
     "capture": "ok_aes128gcm_ecp256",
     "label": "benign",
-    "risk": 8.3,
-    "anomaly": 0.2764,
+    "risk": 11.5,
+    "anomaly": 0.3818,
     "extra_rules": [],
     "missing_rules": []
    },
    {
     "capture": "ok_aes192_sha384_ecp384",
     "label": "benign",
-    "risk": 8.3,
-    "anomaly": 0.2764,
+    "risk": 11.5,
+    "anomaly": 0.3818,
     "extra_rules": [],
     "missing_rules": []
    },
    {
     "capture": "ok_aes256_sha256_ecp256_b",
     "label": "benign",
-    "risk": 8.3,
-    "anomaly": 0.2764,
+    "risk": 11.5,
+    "anomaly": 0.3818,
     "extra_rules": [],
     "missing_rules": []
    },
    {
     "capture": "ok_aes256_sha256_modp2048",
     "label": "benign",
-    "risk": 8.3,
-    "anomaly": 0.2764,
+    "risk": 11.5,
+    "anomaly": 0.3818,
     "extra_rules": [],
     "missing_rules": []
    },
    {
     "capture": "ok_aes256_sha384_ecp521",
     "label": "benign",
-    "risk": 9.0,
-    "anomaly": 0.3014,
+    "risk": 11.5,
+    "anomaly": 0.3818,
     "extra_rules": [],
     "missing_rules": []
    },
@@ -1161,7 +1029,7 @@
     "capture": "ok_aes256_sha384_modp3072",
     "label": "benign",
     "risk": 6.0,
-    "anomaly": 0.1993,
+    "anomaly": 0.2015,
     "extra_rules": [],
     "missing_rules": []
    },
@@ -1176,24 +1044,24 @@
    {
     "capture": "ok_aes256gcm_curve25519",
     "label": "benign",
-    "risk": 8.3,
-    "anomaly": 0.2764,
+    "risk": 11.5,
+    "anomaly": 0.3818,
     "extra_rules": [],
     "missing_rules": []
    },
    {
     "capture": "ok_aes256gcm_ecp384",
     "label": "benign",
-    "risk": 4.9,
-    "anomaly": 0.1639,
+    "risk": 6.8,
+    "anomaly": 0.2273,
     "extra_rules": [],
     "missing_rules": []
    },
    {
     "capture": "ok_aes256gcm_modp3072",
     "label": "benign",
-    "risk": 8.3,
-    "anomaly": 0.2764,
+    "risk": 11.5,
+    "anomaly": 0.3818,
     "extra_rules": [],
     "missing_rules": []
    },
@@ -1208,8 +1076,8 @@
    {
     "capture": "weak_3des_sha1_modp2048",
     "label": "weak-config",
-    "risk": 65.5,
-    "anomaly": 0.2551,
+    "risk": 66.5,
+    "anomaly": 0.3455,
     "extra_rules": [],
     "missing_rules": []
    },
@@ -1224,40 +1092,40 @@
    {
     "capture": "weak_des_md5_modp768",
     "label": "weak-config",
-    "risk": 97.5,
-    "anomaly": 0.2764,
+    "risk": 97.6,
+    "anomaly": 0.3818,
     "extra_rules": [],
     "missing_rules": []
    },
    {
     "capture": "weak_ikev1_aggressive_psk",
     "label": "weak-config",
-    "risk": 79.3,
-    "anomaly": 0.334,
+    "risk": 79.7,
+    "anomaly": 0.3818,
     "extra_rules": [],
     "missing_rules": []
    },
    {
     "capture": "weak_ikev1_main_3des_modp1024",
     "label": "weak-config",
-    "risk": 79.3,
-    "anomaly": 0.334,
+    "risk": 79.7,
+    "anomaly": 0.3818,
     "extra_rules": [],
     "missing_rules": []
    },
    {
     "capture": "weak_ikev1_main_aes_modp2048",
     "label": "benign",
-    "risk": 15.4,
-    "anomaly": 0.334,
+    "risk": 16.8,
+    "anomaly": 0.3818,
     "extra_rules": [],
     "missing_rules": []
    },
    {
     "capture": "weak_no_pfs",
     "label": "weak-config",
-    "risk": 24.8,
-    "anomaly": 0.2764,
+    "risk": 27.4,
+    "anomaly": 0.3818,
     "extra_rules": [],
     "missing_rules": []
    }
@@ -1267,9 +1135,9 @@
   "captures": 309,
   "packets": 88433,
   "megabytes": 48.44,
-  "parse_packets_per_s": 99924,
-  "parse_mb_per_s": 54.73,
-  "end_to_end_packets_per_s": 73316,
+  "parse_packets_per_s": 143072,
+  "parse_mb_per_s": 78.36,
+  "end_to_end_packets_per_s": 92319,
   "largest_capture": "demo_gateway_audit"
  },
  "anomaly_model": {
@@ -1285,8 +1153,8 @@
     "p99": 0.7097695552086244
    },
    "handshake timing": {
-    "median": 0.4160218794538056,
-    "p99": 0.7888419442696533
+    "median": 0.4499715071590934,
+    "p99": 0.7297105229727258
    },
    "reliability": {
     "median": 0.4312840829152164,
@@ -1308,9 +1176,9 @@
    "mean_msg_bytes": 241.25,
    "first_msg_bytes": 440.0,
    "handshake_bytes": 1716.0,
-   "first_rtt_ms": 49.38054084777832,
-   "mean_hs_gap_ms": 44.37220096588135,
-   "max_hs_gap_ms": 60.74953079223633,
+   "first_rtt_ms": 47.28853702545166,
+   "mean_hs_gap_ms": 42.6094929377238,
+   "max_hs_gap_ms": 57.920098304748535,
    "retransmits": 0.0,
    "max_retransmit_streak": 0.0,
    "cookie_challenges": 0.0,
@@ -1319,6 +1187,7 @@
    "best_offered_rank": 2.0,
    "rank_drop": 0.0,
    "failed_prior_attempts": 0.0,
+   "half_open_peers": 0.0,
    "incomplete": 0.0,
    "create_child_per_min": 1.3740943141902178,
    "dpd_messages": 4.0,
@@ -1333,6 +1202,33 @@
    "duration_s": 26.225438952445984
   },
   "trained_on": "140 benign tunnels",
+  "envelope": {
+   "first_rtt_ms": {
+    "median": 3.877181485077963,
+    "p99": 4.899565163836336,
+    "span": 1.0223836787583727
+   },
+   "max_hs_gap_ms": {
+    "median": 4.076163703675002,
+    "p99": 4.938183562290481,
+    "span": 0.9
+   },
+   "retransmits": {
+    "median": 0.0,
+    "p99": 0.6931471805599453,
+    "span": 0.9
+   },
+   "max_retransmit_streak": {
+    "median": 0.0,
+    "p99": 0.6931471805599453,
+    "span": 0.9
+   },
+   "half_open_peers": {
+    "median": 0.0,
+    "p99": 0.0,
+    "span": 0.9
+   }
+  },
   "groups": {
    "first message size": [
     "first_msg_bytes"
@@ -1357,6 +1253,19 @@
    ],
    "rekey rate": [
     "create_child_per_min"
+   ]
+  },
+  "envelopes": {
+   "response time": [
+    "first_rtt_ms",
+    "max_hs_gap_ms"
+   ],
+   "retransmissions": [
+    "retransmits",
+    "max_retransmit_streak"
+   ],
+   "half-open handshakes": [
+    "half_open_peers"
    ]
   }
  }

@@ -17,6 +17,7 @@ from .models import AttemptSummary, ChildSa, EspFlow, Suite, TimelineEvent, Tunn
 
 _MAX_COMBOS = 64
 _PRIOR_WINDOW_S = 300.0
+_HALF_OPEN_WINDOW_S = 300.0
 
 
 @dataclass
@@ -113,8 +114,23 @@ def reconstruct(cap: ParsedCapture) -> Reconstruction:
             and 0 < t.first_ts - p.first_ts <= _PRIOR_WINDOW_S
         ]
 
+    _count_half_open(tunnels)
     orphans = _attach_esp(tunnels, cap.esp)
     return Reconstruction(tunnels, orphans, cap.stats)
+
+
+def _count_half_open(tunnels: list[Tunnel]) -> None:
+    """Flag floods/scans: handshakes the responder never answered, grouped by initiator and by responder.
+
+    A tunnel is half-open when every captured message goes initiator -> responder. `half_open_peers` is the
+    larger of (a) half-open handshakes from the same initiator and (b) half-open handshakes aimed at the same
+    responder within +-5 minutes, so both a sweep from one source and a flood from many sources are visible.
+    Only half-open tunnels carry the count (completed tunnels stay 0).
+    """
+    half = [t for t in tunnels if t.timeline and all(e.direction == "I->R" for e in t.timeline)]
+    for t in half:
+        near = [p for p in half if abs(p.first_ts - t.first_ts) <= _HALF_OPEN_WINDOW_S]
+        t.half_open_peers = max(sum(p.initiator == t.initiator for p in near), sum(p.responder == t.responder for p in near))
 
 
 def _build_tunnel(msgs: list[IkeMessage], cap: ParsedCapture) -> Tunnel | None:
