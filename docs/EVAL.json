@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-10-12T17:28:24+00:00",
+ "generated_at": "2026-10-12T19:00:26+00:00",
  "alert_threshold_risk": 15.0,
  "corpus": {
   "captures": 309,
@@ -731,6 +731,14 @@
    "ikev1_transform_attributes_match_scapy": {
     "ok": 3,
     "total": 3
+   },
+   "ikev1_all_encrypted_messages_decrypt": {
+    "ok": 3,
+    "total": 3
+   },
+   "ikev1_hash_payload_length_matches_negotiated_hash": {
+    "ok": 3,
+    "total": 3
    }
   },
   "checks": [
@@ -895,10 +903,46 @@
     "file": "ikev1-bug-12620.pcapng",
     "ok": true,
     "detail": ""
+   },
+   {
+    "kind": "ikev1_all_encrypted_messages_decrypt",
+    "file": "ikev1-certs.pcap",
+    "ok": true,
+    "detail": "6/6"
+   },
+   {
+    "kind": "ikev1_hash_payload_length_matches_negotiated_hash",
+    "file": "ikev1-certs.pcap",
+    "ok": true,
+    "detail": "lengths=[16] hash_id=1"
+   },
+   {
+    "kind": "ikev1_all_encrypted_messages_decrypt",
+    "file": "ikev1-bug-12610.pcapng",
+    "ok": true,
+    "detail": "12/12"
+   },
+   {
+    "kind": "ikev1_hash_payload_length_matches_negotiated_hash",
+    "file": "ikev1-bug-12610.pcapng",
+    "ok": true,
+    "detail": "lengths=[32] hash_id=4"
+   },
+   {
+    "kind": "ikev1_all_encrypted_messages_decrypt",
+    "file": "ikev1-bug-12620.pcapng",
+    "ok": true,
+    "detail": "7/7"
+   },
+   {
+    "kind": "ikev1_hash_payload_length_matches_negotiated_hash",
+    "file": "ikev1-bug-12620.pcapng",
+    "ok": true,
+    "detail": "lengths=[32] hash_id=4"
    }
   ],
-  "total_ok": 27,
-  "total": 27
+  "total_ok": 33,
+  "total": 33
  },
  "real_lab": {
   "captures": 23,
@@ -1135,9 +1179,9 @@
   "captures": 309,
   "packets": 88433,
   "megabytes": 48.44,
-  "parse_packets_per_s": 143072,
-  "parse_mb_per_s": 78.36,
-  "end_to_end_packets_per_s": 92319,
+  "parse_packets_per_s": 139551,
+  "parse_mb_per_s": 76.43,
+  "end_to_end_packets_per_s": 86509,
   "largest_capture": "demo_gateway_audit"
  },
  "anomaly_model": {

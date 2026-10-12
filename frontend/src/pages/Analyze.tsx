@@ -90,8 +90,8 @@ export default function Analyze() {
                 <input type="file" hidden onChange={(e) => setKeys(e.target.files?.[0] ?? null)} />
               </label>
               <p className="small muted">
-                Optional IKEv2 decryption keys (Wireshark <code>ikev2_decryption_table</code>). Without them IKEv2 authentication and child SAs
-                are reported as <i>not assessable</i>.
+                Optional decryption keys (Wireshark <code>ikev2_decryption_table</code> or <code>ikev1_decryption_table</code>, one file can hold both). Without them IKEv2 authentication
+                and child SAs, and IKEv1 Quick Mode, are reported as <i>not assessable</i>.
               </p>
             </div>
             <button className="primary az-go" disabled={!pcap || busy} onClick={() => pcap && start(() => api.upload(pcap, keys))}>

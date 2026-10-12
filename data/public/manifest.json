@@ -1,7 +1,8 @@
 {
-  "_about": "Real third-party captures from the Wireshark test suite (gitlab.com/wireshark/wireshark, test/captures). Oracle values come from Wireshark's own test suite (suite_decryption.py): the decrypted IKEv2 AUTH payload bytes. Keys: ikev2_decryption_table.tmpl in the same repo. IKEv1 files are cross-checked against Scapy's independent ISAKMP dissector.",
+  "_about": "Real third-party captures from the Wireshark test suite (gitlab.com/wireshark/wireshark, test/captures). Oracle values come from Wireshark's own test suite (suite_decryption.py): the decrypted IKEv2 AUTH payload bytes. Keys: ikev2_decryption_table.tmpl and ikev1_decryption_table.tmpl in the same repo. IKEv1 files are cross-checked against Scapy's independent ISAKMP dissector.",
   "provenance": "real-public",
   "keys": "ikev2_decryption_table.tmpl",
+  "keys_ikev1": "ikev1_decryption_table.tmpl",
   "ikev2": {
     "ikev2-decrypt-3des-sha1_160.pcap":  {"auth_data": "02f7a0d5f1fdc8ea81039818c65bb9bd09af9b8917319b887ff9ba3046c344c7", "encr": "3DES"},
     "ikev2-decrypt-aes128ccm12.pcap":    {"auth_data": "c2104394299e1ffe7908ea720ad5d13717a0d454e4fa0a2128ea689411f479c4", "encr": "AES_CCM_12"},

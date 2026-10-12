@@ -105,10 +105,10 @@ def _samples() -> dict[str, dict[str, Any]]:
         man = json.loads(pm.read_text())
         for f in list(man["ikev1"]) + ["ikev2-decrypt-aes256gcm16.pcap", "ikev2-decrypt-3des-sha1_160.pcap"]:
             if (PUBLIC / f).exists():
-                v2 = f.startswith("ikev2")
+                key_file = man["keys"] if f.startswith("ikev2") else man.get("keys_ikev1") if f in man["ikev1"] else None
                 out[f] = {"name": f, "provenance": "real-public", "pcap": PUBLIC / f,
-                          "keys": PUBLIC / man["keys"] if v2 else None,
-                          "description": "Real Wireshark public sample capture" + (" (decryption keys from Wireshark test suite)" if v2 else "")}
+                          "keys": PUBLIC / key_file if key_file else None,
+                          "description": "Real Wireshark public sample capture" + (" (decryption keys from Wireshark test suite)" if key_file else "")}
     return out
 
 
