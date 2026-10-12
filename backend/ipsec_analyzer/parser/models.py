@@ -177,6 +177,7 @@ class CaptureStats:
     last_ts: float = 0.0
     parse_seconds: float = 0.0
     errors: list[str] = field(default_factory=list)
+    other_vpn: list[dict] = field(default_factory=list)  # WireGuard / OpenVPN seen (detection only, not analysed)
 
 
 @dataclass

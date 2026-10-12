@@ -138,6 +138,6 @@ Behavioural families (all simulator-only, designed by us): oversize handshakes 6
 * PyShark/TShark not used; autoencoder not built; IKEv1 phase-2 and keyless IKEv2 child SAs not observable without keys (IKEv1 Quick Mode needs a supplied key table; none was produced from the lab yet).
 * IKEv2 NAT-T is handled (marker, UDP-encapsulated ESP) but only exercised lightly; IPv6 decoding is minimal; AH is counted, not analysed in depth.
 * One capture per analysis, 256 MB default cap (configurable). Optional shared-key auth with a read-only role, but no per-user accounts, audit log or RBAC.
-* WireGuard/OpenVPN: roadmap only.
+* WireGuard/OpenVPN: **detection only**. The results page lists them as "other VPN traffic seen, not analysed" (WireGuard by its fixed handshake sizes, OpenVPN by UDP/1194 plus a hard-reset opcode, so OpenVPN on another port is missed). There is no security assessment of either: WireGuard has no cipher negotiation to audit, and OpenVPN's ciphers are negotiated inside TLS.
 * Risk weights and bands are judgment calls, not calibrated against incident data.
 * The UI was exercised in headless Edge against the real API (upload → results → detail → evaluation) with no failed requests; its only automated frontend test is the browser smoke test above (no component or unit tests).
