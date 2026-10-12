@@ -68,7 +68,7 @@ def summarize(res: AnalysisResult) -> dict[str, Any]:
         "tunnel_count": len(res.tunnels), "bands": bands, "orphan_esp_flows": len(res.reconstruction.orphan_esp),
         "policy": res.policy_name, "anomaly_model": get_model() is not None,
         "decrypted_tunnels": sum(1 for r in res.tunnels if r.tunnel.decrypted),
-        "parse_errors": st.errors[:10], "duration_s": round(st.last_ts - st.first_ts, 2),
+        "other_vpn": st.other_vpn, "parse_errors": st.errors[:10], "duration_s": round(st.last_ts - st.first_ts, 2),
     }
 
 
