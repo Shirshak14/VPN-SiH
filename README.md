@@ -51,7 +51,7 @@ cd frontend && npm ci && npm run dev                                     # http:
 `npm ci` may print a harmless warning that esbuild's postinstall script is not pre-approved; the build works regardless.
 
 **UI smoke test.** With the API and the UI running, `cd frontend && npm run e2e` drives a real browser through upload, a bundled scenario, the results page, a tunnel, and the Evaluation page,
-checking every figure against the API (needs Node 22+ and Chrome, Chromium or Edge; it deletes the analyses it creates).
+checking every figure against the API (needs Node 22+ and Chrome, Chromium or Edge; it deletes the analyses it creates). CI runs it on every push and pull request (`e2e` job); it passes `--no-sandbox` automatically when run as root, e.g. in a container.
 
 **About `docs/EVAL.json`.** Regenerating it rewrites two run-dependent fields, `generated_at` and `throughput` (packets/s varies from run to run), so the file shows as modified even when nothing changed.
 The Evaluation page displays both, so they stay in the file. To check that the *metrics* reproduce, compare everything else:
@@ -125,4 +125,4 @@ Behavioural families (all simulator-only, designed by us): oversize handshakes 6
 * Single-file in-memory analysis with a 64 MB upload cap; streaming/chunked ingest is the documented upgrade path. No authentication/RBAC (single-user demo).
 * WireGuard/OpenVPN: roadmap only.
 * Risk weights and bands are judgment calls, not calibrated against incident data.
-* The UI was exercised in headless Edge against the real API (upload → results → detail → evaluation) with no failed requests; it has no automated frontend tests.
+* The UI was exercised in headless Edge against the real API (upload → results → detail → evaluation) with no failed requests; its only automated frontend test is the browser smoke test above (no component or unit tests).
