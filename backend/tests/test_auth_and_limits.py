@@ -1,6 +1,7 @@
 """Optional API-key auth (two roles, cookie login) and upload limits. Uses the bundled demo capture; SQLite, no mocks."""
 import importlib
 import os
+import secrets
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,10 @@ from fastapi.testclient import TestClient
 ROOT = Path(__file__).resolve().parents[2]
 DEMO = ROOT / "data/captures/synthetic/demo_gateway_audit.pcap"
 pytestmark = pytest.mark.skipif(not DEMO.exists(), reason="bundled demo capture missing")
+
+# Keys are generated per run so no credential-looking literal sits in the repo (secret scanners flag those).
+KEY = secrets.token_urlsafe(16)
+RO_KEY = secrets.token_urlsafe(16)
 
 
 @pytest.fixture()
@@ -43,18 +48,18 @@ def test_open_by_default(make_client):
 
 
 def test_key_required_when_configured_but_health_stays_open(make_client):
-    c = make_client(API_KEY="s3cret")
+    c = make_client(API_KEY=KEY)
     assert c.get("/api/health").status_code == 200  # docker healthcheck must keep working
     assert c.get("/api/analyses").status_code == 401
-    assert c.get("/api/analyses", headers={"X-API-Key": "wrong"}).status_code == 401
-    assert c.get("/api/analyses", headers={"X-API-Key": "s3cret"}).status_code == 200
-    assert c.get("/api/analyses", headers={"Authorization": "Bearer s3cret"}).status_code == 200
+    assert c.get("/api/analyses", headers={"X-API-Key": "not-" + KEY}).status_code == 401
+    assert c.get("/api/analyses", headers={"X-API-Key": KEY}).status_code == 200
+    assert c.get("/api/analyses", headers={"Authorization": f"Bearer {KEY}"}).status_code == 200
     assert c.get("/api/auth").json() == {"required": True, "authenticated": False, "role": None}
 
 
 def test_cookie_login_unlocks_downloads_and_logout_locks_again(make_client):
-    c = make_client(API_KEY="s3cret")
-    r = c.post("/api/login", json={"key": "s3cret"})
+    c = make_client(API_KEY=KEY)
+    r = c.post("/api/login", json={"key": KEY})
     assert r.status_code == 200 and r.json()["role"] == "admin"
     assert "httponly" in r.headers["set-cookie"].lower() and "samesite=strict" in r.headers["set-cookie"].lower()
     assert c.get("/api/analyses").status_code == 200  # cookie jar carries the session
@@ -64,20 +69,20 @@ def test_cookie_login_unlocks_downloads_and_logout_locks_again(make_client):
 
 
 def test_readonly_key_reads_but_cannot_upload_or_delete(make_client):
-    c = make_client(API_KEY="admin-key", READONLY_API_KEY="read-key")
-    ro = {"X-API-Key": "read-key"}
+    c = make_client(API_KEY=KEY, READONLY_API_KEY=RO_KEY)
+    ro = {"X-API-Key": RO_KEY}
     assert c.get("/api/analyses", headers=ro).status_code == 200
     r = c.post("/api/samples/demo_gateway_audit/analyze", headers=ro)
     assert r.status_code == 403 and "read-only" in r.json()["detail"]
     assert c.delete("/api/analyses/1", headers=ro).status_code == 403
-    assert c.delete("/api/analyses/1", headers={"X-API-Key": "admin-key"}).status_code == 404  # allowed, just not found
+    assert c.delete("/api/analyses/1", headers={"X-API-Key": KEY}).status_code == 404  # allowed, just not found
 
 
 def test_repeated_bad_logins_are_throttled(make_client):
-    c = make_client(API_KEY="s3cret")
+    c = make_client(API_KEY=KEY)
     codes = [c.post("/api/login", json={"key": f"bad{i}"}).status_code for i in range(7)]
     assert codes[:5] == [401] * 5 and codes[5:] == [429, 429]
-    assert c.post("/api/login", json={"key": "s3cret"}).status_code == 429  # even the right key waits out the window
+    assert c.post("/api/login", json={"key": KEY}).status_code == 429  # even the right key waits out the window
 
 
 def test_upload_over_the_configured_limit_is_rejected_and_cleaned_up(make_client, tmp_path):
