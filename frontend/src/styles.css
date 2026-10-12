@@ -272,3 +272,8 @@ tbody tr.click:focus-visible { outline: 3px solid var(--focus); outline-offset: 
 .legend { margin: var(--sp-2) 0 0; }
 @media (max-width: 800px) { .evt td, .evt th { padding: var(--sp-3) var(--sp-2); } .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .metrics .metric:first-child { grid-column: span 2; } }
 @media (min-width: 801px) and (max-width: 1000px) { .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* Sign-in (only shown when the server sets API_KEY) */
+.login { max-width: 26rem; margin: var(--sp-6, 3rem) auto; display: flex; flex-direction: column; gap: var(--sp-2); }
+.login input { padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: inherit; font: inherit; }
+.linklike { background: none; border: 0; color: var(--brand); cursor: pointer; font: inherit; margin-left: var(--sp-3); padding: 0; text-decoration: underline; }
