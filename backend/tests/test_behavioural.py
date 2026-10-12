@@ -90,3 +90,26 @@ def test_benign_tunnels_stay_quiet_on_envelope_groups(tmp_path, model):
             a = model.score(t)
             fp += a["is_anomalous"] and a["dominant_group"] in env
     assert fp <= 1
+
+
+def test_lab_scan_probe_is_parsed_and_flagged_and_evaluated(tmp_path):
+    """The lab's stdlib probe builder emits packets our parser accepts; evaluate_lab judges a scan capture."""
+    import json
+    import os
+    import sys
+
+    from ipsec_analyzer.evaluation import evaluate_lab
+    from synth import builder as B
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lab"))
+    from scan_probe import ike_sa_init
+
+    pkts = [(1000.0 + 0.3 * i, B.ethernet(B.ipv4_udp_frame("10.99.0.2", "10.99.0.3", 500, 500,
+            ike_sa_init(os.urandom(8), os.urandom(256), os.urandom(32)), 100 + i), b"\x02" * 6, b"\x04" * 6)) for i in range(12)]
+    B.write_pcap(str(tmp_path / "behav_half_open_scan.pcap"), pkts)
+    (tmp_path / "manifest.json").write_text(json.dumps({"behav_half_open_scan": {
+        "file": "behav_half_open_scan.pcap", "label": "behavioral", "ike_version": 2, "keys": None,
+        "expect_rules": ["IKE-HALF-OPEN-FLOOD"], "optional_rules": ["SA-RETRANSMIT-EXCESS"], "scan_attempts": 12}}))
+    out = evaluate_lab(tmp_path, None)
+    assert out["rule_level"]["tp"] == 1 and out["rule_level"]["fp"] == 0 and out["rule_level"]["fn"] == 0
+    assert out["detection"]["rules"]["tp"] == 1

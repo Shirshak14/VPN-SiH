@@ -154,11 +154,13 @@ def evaluate_lab(lab_dir: Path, model: AnomalyModel | None) -> dict[str, Any] | 
     for name, m in sorted(man.items()):
         res = analyze(lab_dir / m["file"], lab_dir / m["keys"] if m.get("keys") else None, engine, model)
         est = [r for r in res.tunnels if r.tunnel.chosen is not None and r.tunnel.status == "established"]
+        if not est and m.get("scan_attempts"):  # half-open scan: nothing completes; judge the most-flooded handshake
+            est = [max(res.tunnels, key=lambda r: r.tunnel.half_open_peers)] if res.tunnels else []
         if not est:
             rows.append({"capture": name, "error": "no established tunnel"})
             continue
         r = est[-1]
-        got = {f.rule_id for f in r.findings if f.category == "violation"}
+        got = {f.rule_id for f in r.findings if f.category == "violation"} - set(m.get("optional_rules", []))
         want = set(m["expect_rules"])
         if m["ike_version"] == 1 and not r.tunnel.child_observable:  # Quick Mode encrypted and not opened: ESP rules unobservable
             want -= V1_UNOBSERVABLE_RULES
