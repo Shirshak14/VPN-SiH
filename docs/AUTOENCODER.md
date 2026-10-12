@@ -21,7 +21,7 @@ held-out tunnels as the deployed layer.
 | a_slow_relay | 6 | 6 | 6 | 5 |
 | a_esp_replay | 6 | 0 | 0 | 0 |
 | d_dh_only / d_offer_strong_chose_weak | 12 | 0 | 11 | 12 |
-| other weak-config and downgrade families (10 families, 60 tunnels) | 60 | 4 | 6 | 5 |
+| other weak-config and downgrade families (10 families, 60 tunnels) | 60 | 5 | 8 | 6 |
 | **benign false alarms** (of 60) | 60 | 3 | 0 | 0 |
 | **all positives caught** (of 108) | 108 | 34 | 43 | 40 |
 
