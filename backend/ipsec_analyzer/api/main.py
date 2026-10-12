@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import threading
 from pathlib import Path
 from typing import Any
 
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,16 +16,20 @@ from sqlalchemy.orm import Session
 from ..reports.export import to_json, to_syslog
 from ..reports.pdf import build_pdf
 from ..rules.policy import SEV_ORDER
-from . import service
+from . import auth, service
 from .db import DATA_DIR, Analysis, SessionLocal, TunnelRow, init_db
 
-MAX_UPLOAD = 64 * 1024 * 1024
+# Uploads stream to disk in 1 MiB chunks and the parser keeps only per-flow ESP counters, so the cap is a disk/time
+# limit rather than a memory one (measured: a 244 MB / 2 M-packet capture peaks at ~51 MB RSS). Override with MAX_UPLOAD_MB.
+MAX_UPLOAD = int(os.environ.get("MAX_UPLOAD_MB", "256")) * 1024 * 1024
+MAX_KEYS_UPLOAD = 1024 * 1024  # a key table is a few KB; anything bigger is not one
 PCAP_MAGICS = {b"\xd4\xc3\xb2\xa1", b"\xa1\xb2\xc3\xd4", b"\x4d\x3c\xb2\xa1", b"\xa1\xb2\x3c\x4d", b"\x0a\x0d\x0d\x0a"}
 CAPTURES = DATA_DIR / "captures"
 PUBLIC = DATA_DIR / "public"
 
 app = FastAPI(title="IPsec VPN Analyzer", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+auth.install(app)  # no-op until API_KEY is set
 
 
 @app.on_event("startup")
@@ -105,10 +110,10 @@ def _samples() -> dict[str, dict[str, Any]]:
         man = json.loads(pm.read_text())
         for f in list(man["ikev1"]) + ["ikev2-decrypt-aes256gcm16.pcap", "ikev2-decrypt-3des-sha1_160.pcap"]:
             if (PUBLIC / f).exists():
-                v2 = f.startswith("ikev2")
+                key_file = man["keys"] if f.startswith("ikev2") else man.get("keys_ikev1") if f in man["ikev1"] else None
                 out[f] = {"name": f, "provenance": "real-public", "pcap": PUBLIC / f,
-                          "keys": PUBLIC / man["keys"] if v2 else None,
-                          "description": "Real Wireshark public sample capture" + (" (decryption keys from Wireshark test suite)" if v2 else "")}
+                          "keys": PUBLIC / key_file if key_file else None,
+                          "description": "Real Wireshark public sample capture" + (" (decryption keys from Wireshark test suite)" if key_file else "")}
     return out
 
 
@@ -128,8 +133,11 @@ def policy() -> dict[str, Any]:
 
 # ------------------------------------------------------------------ analyses
 @app.post("/api/analyses", status_code=202)
-async def create_analysis(bg: BackgroundTasks, pcap: UploadFile = File(...), keys: UploadFile | None = File(None),
+async def create_analysis(request: Request, bg: BackgroundTasks, pcap: UploadFile = File(...), keys: UploadFile | None = File(None),
                           s: Session = Depends(db)) -> dict[str, Any]:
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > MAX_UPLOAD + MAX_KEYS_UPLOAD + 65536:  # refuse before reading the body
+        raise HTTPException(413, f"request exceeds the {MAX_UPLOAD // 2**20} MB upload limit (set MAX_UPLOAD_MB to change it)")
     head = await pcap.read(4)
     if head not in PCAP_MAGICS:
         raise HTTPException(400, "not a PCAP/PCAPNG file (bad magic bytes)")
@@ -147,12 +155,18 @@ async def create_analysis(bg: BackgroundTasks, pcap: UploadFile = File(...), key
                 shutil.rmtree(d, ignore_errors=True)
                 s.delete(a)
                 s.commit()
-                raise HTTPException(413, f"capture exceeds {MAX_UPLOAD // 2**20} MB demo limit (streaming ingest is roadmap)")
+                raise HTTPException(413, f"capture exceeds the {MAX_UPLOAD // 2**20} MB upload limit (set MAX_UPLOAD_MB to change it)")
             f.write(chunk)
     kp = None
     if keys is not None:
         kp = d / "keys.txt"
-        kp.write_bytes(await keys.read())
+        blob = await keys.read(MAX_KEYS_UPLOAD + 1)
+        if len(blob) > MAX_KEYS_UPLOAD:
+            shutil.rmtree(d, ignore_errors=True)
+            s.delete(a)
+            s.commit()
+            raise HTTPException(413, "key file larger than 1 MB; expected a Wireshark decryption table")
+        kp.write_bytes(blob)
     bg.add_task(service.run_analysis, a.id, d / "capture.pcap", kp)
     return _analysis_dict(a)
 

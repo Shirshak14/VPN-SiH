@@ -21,8 +21,16 @@ export interface Sample {
   has_keys: boolean;
 }
 
+export interface AuthState {
+  required: boolean;
+  authenticated: boolean;
+  role: "admin" | "readonly" | null;
+}
+export const AUTH_EVENT = "ipsec-auth-required";
+
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, init);
+  if (r.status === 401 && !url.startsWith("/api/login")) window.dispatchEvent(new Event(AUTH_EVENT));
   if (!r.ok) {
     let msg = `${r.status} ${r.statusText}`;
     try {
@@ -37,6 +45,10 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  auth: () => req<AuthState>("/api/auth"),
+  login: (key: string) =>
+    req<{ role: string }>("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }),
+  logout: () => req<{ ok: boolean }>("/api/logout", { method: "POST" }),
   samples: () => req<Sample[]>("/api/samples"),
   analyses: () => req<Analysis[]>("/api/analyses"),
   analysis: (id: number) => req<Analysis>(`/api/analyses/${id}`),

@@ -93,10 +93,10 @@ class RuleEngine:
             cov("COV-IKEV2-ENCRYPTED", "IKEv2 authentication and child SA not observable",
                 "IKEv2 encrypts everything after IKE_SA_INIT. Without the SK_e/SK_a keys the auth method, ESP "
                 "algorithms and PFS status cannot be assessed; only IKE SA suite, timing and ESP sequencing are.")
-        elif t.ike_version == 1 and t.create_child_exchanges:
+        elif t.ike_version == 1 and t.create_child_exchanges and not t.child_observable:
             cov("COV-IKEV1-PHASE2", "IKEv1 Quick Mode not observable",
                 "Quick Mode is encrypted with phase-1 keys; ESP transforms and PFS were not assessed.")
-        if t.decrypted and t.child_sas and not any(c.via == "CREATE_CHILD_SA" for c in t.child_sas):
+        if t.ike_version == 2 and t.decrypted and t.child_sas and not any(c.via == "CREATE_CHILD_SA" for c in t.child_sas):
             cov("COV-PFS-UNKNOWN", "PFS not assessable (no child SA rekey observed)",
                 "The initial child SA never carries a key exchange, so PFS can only be judged from a CREATE_CHILD_SA rekey; none appears in this capture.")
         if t.status == "established" and not t.child_sas and t.ike_version == 2 and t.decrypted:
@@ -148,8 +148,10 @@ def _no_pfs(t: Tunnel, eng: RuleEngine, params: dict, rule: dict) -> CheckResult
     The initial child SA (IKE_AUTH) is keyed from the IKE SA and never carries a KE payload, and real
     implementations (strongSwan) omit the DH transform there even when PFS is configured -- so its absence
     proves nothing. Only a rekey/new child *without* a KE payload is evidence of missing PFS.
+    IKEv1 Quick Mode is different: every exchange, the first included, carries a KE payload when PFS is on
+    (RFC 2409 §5.5), so a decrypted Quick Mode without one is direct evidence.
     """
-    rekeys = [c for c in t.child_sas if c.via == "CREATE_CHILD_SA"]
+    rekeys = [c for c in t.child_sas if c.via in ("CREATE_CHILD_SA", "Quick Mode")]
     bad = [c for c in rekeys if not c.pfs]
     if bad:
         return [("", {"child_exchanges_observed": len(rekeys), "without_key_exchange": len(bad),
@@ -207,6 +209,15 @@ def _retransmits(t: Tunnel, eng: RuleEngine, params: dict, rule: dict) -> CheckR
     lim = eng.policy.thresholds["retransmit_alert"]
     if t.retransmits >= lim:
         return [("", {"retransmits": t.retransmits, "longest_streak": t.max_retransmit_streak, "threshold": lim})]
+    return []
+
+
+@check("half_open")
+def _half_open(t: Tunnel, eng: RuleEngine, params: dict, rule: dict) -> CheckResult:
+    lim = eng.policy.thresholds["half_open_alert"]
+    if t.half_open_peers >= lim:
+        return [("", {"unanswered_handshakes": t.half_open_peers, "window_s": "±300", "threshold": lim,
+                      "initiator": t.initiator, "responder": t.responder})]
     return []
 
 

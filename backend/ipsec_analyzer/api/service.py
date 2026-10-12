@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import threading
 import traceback
 from pathlib import Path
 from typing import Any
@@ -67,12 +68,21 @@ def summarize(res: AnalysisResult) -> dict[str, Any]:
         "tunnel_count": len(res.tunnels), "bands": bands, "orphan_esp_flows": len(res.reconstruction.orphan_esp),
         "policy": res.policy_name, "anomaly_model": get_model() is not None,
         "decrypted_tunnels": sum(1 for r in res.tunnels if r.tunnel.decrypted),
-        "parse_errors": st.errors[:10], "duration_s": round(st.last_ts - st.first_ts, 2),
+        "other_vpn": st.other_vpn, "parse_errors": st.errors[:10], "duration_s": round(st.last_ts - st.first_ts, 2),
     }
 
 
+_SLOTS = threading.BoundedSemaphore(max(1, int(os.environ.get("MAX_CONCURRENT_ANALYSES", "2"))))
+
+
 def run_analysis(analysis_id: int, pcap: Path, keys: Path | None) -> None:
-    """Executed in a worker thread. Updates stage/status so the UI can show progress."""
+    """Executed in a worker thread; at most MAX_CONCURRENT_ANALYSES run at once (the rest stay "queued")."""
+    with _SLOTS:
+        _run_analysis(analysis_id, pcap, keys)
+
+
+def _run_analysis(analysis_id: int, pcap: Path, keys: Path | None) -> None:
+    """Updates stage/status so the UI can show progress."""
     def stage(name: str) -> None:
         with SessionLocal() as s:
             a = s.get(Analysis, analysis_id)

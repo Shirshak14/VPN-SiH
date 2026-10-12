@@ -154,13 +154,15 @@ def evaluate_lab(lab_dir: Path, model: AnomalyModel | None) -> dict[str, Any] | 
     for name, m in sorted(man.items()):
         res = analyze(lab_dir / m["file"], lab_dir / m["keys"] if m.get("keys") else None, engine, model)
         est = [r for r in res.tunnels if r.tunnel.chosen is not None and r.tunnel.status == "established"]
+        if not est and m.get("scan_attempts"):  # half-open scan: nothing completes; judge the most-flooded handshake
+            est = [max(res.tunnels, key=lambda r: r.tunnel.half_open_peers)] if res.tunnels else []
         if not est:
             rows.append({"capture": name, "error": "no established tunnel"})
             continue
         r = est[-1]
-        got = {f.rule_id for f in r.findings if f.category == "violation"}
+        got = {f.rule_id for f in r.findings if f.category == "violation"} - set(m.get("optional_rules", []))
         want = set(m["expect_rules"])
-        if m["ike_version"] == 1:  # IKEv1 Quick Mode is encrypted: ESP rules unobservable
+        if m["ike_version"] == 1 and not r.tunnel.child_observable:  # Quick Mode encrypted and not opened: ESP rules unobservable
             want -= V1_UNOBSERVABLE_RULES
         tp += len(got & want)
         fp += len(got - want)
@@ -219,6 +221,22 @@ def validate_public(public_dir: Path) -> dict[str, Any]:
                 else:
                     ok &= T[sname][1].get(sc[sname]) == a.get(attr_id)
         add("ikev1_transform_attributes_match_scapy", f, ok)
+    # IKEv1 key-assisted decryption: no Wireshark-extracted plaintext is available as an oracle, so the check is
+    # structural and independent of our IV logic: every encrypted message must open into a valid payload chain
+    # (a wrong key or IV garbles the first CBC block and the chain fails to parse), and each HASH payload must be
+    # exactly as long as the negotiated hash's digest.
+    if man.get("keys_ikev1"):
+        v1_keys = load_key_table(public_dir / man["keys_ikev1"])
+        digest = {1: 16, 2: 20, 4: 32, 5: 48, 6: 64}
+        for f in man["ikev1"]:
+            cap = parse_pcap(public_dir / f, keys=v1_keys)
+            enc = [m for m in cap.ike if m.encrypted_v1]
+            sa = next((p.transforms[0].attrs for m in cap.ike for p in m.clear.v1_proposals[:1] if p.transforms and m.src != cap.ike[0].src), {})
+            hashes = [m.decrypted.hash_len for m in enc if m.decrypted and m.decrypted.hash_len]
+            add("ikev1_all_encrypted_messages_decrypt", f, bool(enc) and all(m.decrypted is not None for m in enc),
+                f"{sum(m.decrypted is not None for m in enc)}/{len(enc)}")
+            add("ikev1_hash_payload_length_matches_negotiated_hash", f,
+                bool(hashes) and all(h == digest.get(sa.get(2)) for h in hashes), f"lengths={sorted(set(hashes))} hash_id={sa.get(2)}")
     by_kind: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     for c in checks:
         by_kind[c["kind"]][0] += c["ok"]
