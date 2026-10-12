@@ -210,6 +210,15 @@ def _retransmits(t: Tunnel, eng: RuleEngine, params: dict, rule: dict) -> CheckR
     return []
 
 
+@check("half_open")
+def _half_open(t: Tunnel, eng: RuleEngine, params: dict, rule: dict) -> CheckResult:
+    lim = eng.policy.thresholds["half_open_alert"]
+    if t.half_open_peers >= lim:
+        return [("", {"unanswered_handshakes": t.half_open_peers, "window_s": "±300", "threshold": lim,
+                      "initiator": t.initiator, "responder": t.responder})]
+    return []
+
+
 @check("esp_replay")
 def _esp_replay(t: Tunnel, eng: RuleEngine, params: dict, rule: dict) -> CheckResult:
     th = eng.policy.thresholds
