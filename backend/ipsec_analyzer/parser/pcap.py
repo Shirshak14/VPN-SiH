@@ -15,12 +15,28 @@ from scapy.utils import RawPcapNgReader, RawPcapReader
 
 from . import constants as C
 from .ike import parse_ike
-from .models import CaptureStats, EspPacket, IkeMessage, IkeParseError, ParsedCapture
+from .models import CaptureStats, EspFlowStats, IkeMessage, IkeParseError, ParsedCapture
 
 LINK_ETHERNET, LINK_RAW, LINK_SLL, LINK_RAW2, LINK_SLL2 = 1, 101, 113, 12, 276
 _IP_PROTO_ESP, _IP_PROTO_AH, _IP_PROTO_UDP = 50, 51, 17
 _V6_EXT = {0, 43, 60}  # hop-by-hop, routing, destination options (simple chain skipping)
 _MAX_FRAGMENT_BUFFERS = 4096
+
+
+class _EspFlows:
+    """Streams ESP/AH packets into per-flow statistics; flows keep first-seen order."""
+
+    def __init__(self) -> None:
+        self.flows: dict[tuple, EspFlowStats] = {}
+        self.packets = {_IP_PROTO_ESP: 0, _IP_PROTO_AH: 0}
+
+    def add(self, ts: float, src: str, dst: str, proto: int, spi: int, seq: int, length: int, udp_encap: bool = False) -> None:
+        self.packets[proto] += 1
+        key = (spi, src, dst, proto)
+        f = self.flows.get(key)
+        if f is None:
+            f = self.flows[key] = EspFlowStats(spi, src, dst, proto, ts, seq)
+        f.add(ts, seq, length, udp_encap)
 
 
 class _Defrag:
@@ -95,7 +111,7 @@ def parse_pcap(path: str | Path, *, keys=None) -> ParsedCapture:
     path = str(path)
     stats = CaptureStats()
     ike: list[IkeMessage] = []
-    esp: list[EspPacket] = []
+    esp = _EspFlows()
     defrag = _Defrag()
     t0 = time.perf_counter()
 
@@ -123,9 +139,9 @@ def parse_pcap(path: str | Path, *, keys=None) -> ParsedCapture:
 
     stats.parse_seconds = time.perf_counter() - t0
     stats.ike_messages = len(ike)
-    stats.esp_packets = sum(1 for e in esp if e.proto == _IP_PROTO_ESP)
-    stats.ah_packets = sum(1 for e in esp if e.proto == _IP_PROTO_AH)
-    cap = ParsedCapture(path=path, ike=ike, esp=esp, stats=stats)
+    stats.esp_packets = esp.packets[_IP_PROTO_ESP]
+    stats.ah_packets = esp.packets[_IP_PROTO_AH]
+    cap = ParsedCapture(path=path, ike=ike, esp_flows=list(esp.flows.values()), stats=stats)
     if keys:
         from .decrypt import apply_keys  # local import: optional dependency on `cryptography`
         apply_keys(cap, keys)
@@ -181,10 +197,10 @@ def _handle_ip(version: int, l3: bytes, frame_no: int, ts: float, ike, esp, stat
 
     if proto == _IP_PROTO_ESP and len(payload) >= 8:
         spi, seq = struct.unpack_from("!II", payload)
-        esp.append(EspPacket(frame_no, ts, src, dst, _IP_PROTO_ESP, spi, seq, len(payload)))
+        esp.add(ts, src, dst, _IP_PROTO_ESP, spi, seq, len(payload))
     elif proto == _IP_PROTO_AH and len(payload) >= 12:
         spi, seq = struct.unpack_from("!II", payload, 4)
-        esp.append(EspPacket(frame_no, ts, src, dst, _IP_PROTO_AH, spi, seq, len(payload)))
+        esp.add(ts, src, dst, _IP_PROTO_AH, spi, seq, len(payload))
     elif proto == _IP_PROTO_UDP and len(payload) >= 8:
         sport, dport, ulen = struct.unpack_from("!HHH", payload)
         data = payload[8:ulen] if 8 <= ulen <= len(payload) else payload[8:]
@@ -202,6 +218,6 @@ def _handle_udp(src, dst, sport, dport, data: bytes, frame_no, ts, ike, esp, sta
                                  dport=dport, natt_marker=True))
         elif len(data) >= 8:  # ESP-in-UDP
             spi, seq = struct.unpack_from("!II", data)
-            esp.append(EspPacket(frame_no, ts, src, dst, _IP_PROTO_ESP, spi, seq, len(data), udp_encap=True))
+            esp.add(ts, src, dst, _IP_PROTO_ESP, spi, seq, len(data), udp_encap=True)
     else:
         stats.other_udp += 1

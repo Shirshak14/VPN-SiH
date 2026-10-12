@@ -12,7 +12,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 from ..parser import constants as C
-from ..parser.models import CaptureStats, EspPacket, IkeMessage, ParsedCapture, Proposal
+from ..parser.models import CaptureStats, EspFlowStats, IkeMessage, ParsedCapture, Proposal
 from .models import AttemptSummary, ChildSa, EspFlow, Suite, TimelineEvent, Tunnel
 
 _MAX_COMBOS = 64
@@ -115,7 +115,7 @@ def reconstruct(cap: ParsedCapture) -> Reconstruction:
         ]
 
     _count_half_open(tunnels)
-    orphans = _attach_esp(tunnels, cap.esp)
+    orphans = _attach_esp(tunnels, cap.esp_flows)
     return Reconstruction(tunnels, orphans, cap.stats)
 
 
@@ -364,35 +364,19 @@ def _fill_status(t: Tunnel, msgs: list[IkeMessage]) -> None:
 
 
 # ----------------------------------------------------------------------------- ESP
-def _flows(esp: list[EspPacket]) -> list[tuple[EspFlow, list[EspPacket]]]:
-    by: dict[tuple, list[EspPacket]] = defaultdict(list)
-    for p in esp:
-        by[(p.spi, p.src, p.dst, p.proto)].append(p)
-    out = []
-    for (spi, src, dst, proto), pk in by.items():
-        pk.sort(key=lambda p: p.frame)
-        mx, gaps, replays = pk[0].seq, 0, 0
-        for p in pk[1:]:
-            if p.seq > mx:
-                gaps += min(p.seq - mx - 1, 65535)
-                mx = p.seq
-            else:
-                replays += 1
-        iats = [b.ts - a.ts for a, b in zip(pk, pk[1:])]
-        out.append((EspFlow(
-            spi=f"{spi:08x}", src=src, dst=dst, protocol="ESP" if proto == 50 else "AH",
-            packets=len(pk), bytes=sum(p.length for p in pk), first_ts=pk[0].ts, last_ts=pk[-1].ts,
-            seq_first=pk[0].seq, seq_last=pk[-1].seq, seq_gaps=gaps, seq_replays=replays,
-            udp_encap=any(p.udp_encap for p in pk),
-            mean_iat_ms=(sum(iats) / len(iats) * 1000) if iats else 0.0,
-            mean_len=sum(p.length for p in pk) / len(pk),
-        ), pk))
-    return out
+def _flow(f: EspFlowStats) -> EspFlow:
+    n = f.packets
+    return EspFlow(
+        spi=f"{f.spi:08x}", src=f.src, dst=f.dst, protocol="ESP" if f.proto == 50 else "AH",
+        packets=n, bytes=f.bytes, first_ts=f.first_ts, last_ts=f.last_ts,
+        seq_first=f.seq_first, seq_last=f.seq_last, seq_gaps=f.seq_gaps, seq_replays=f.seq_replays,
+        udp_encap=f.udp_encap, mean_iat_ms=(f.iat_sum / (n - 1) * 1000) if n > 1 else 0.0, mean_len=f.bytes / n,
+    )
 
 
-def _attach_esp(tunnels: list[Tunnel], esp: list[EspPacket]) -> list[EspFlow]:
+def _attach_esp(tunnels: list[Tunnel], esp: list[EspFlowStats]) -> list[EspFlow]:
     orphans: list[EspFlow] = []
-    for flow, _pk in _flows(esp):
+    for flow in map(_flow, esp):
         target = next(
             (t for t in tunnels for c in t.child_sas if flow.spi in (c.spi_initiator, c.spi_responder)), None
         )

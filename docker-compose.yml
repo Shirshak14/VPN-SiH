@@ -13,6 +13,10 @@ services:
     build: { context: ., dockerfile: backend/Dockerfile }
     environment:
       DATABASE_URL: "postgresql+psycopg2://${POSTGRES_USER:-analyzer}:${POSTGRES_PASSWORD:-analyzer}@db:5432/${POSTGRES_DB:-analyzer}"
+      # Optional access control (empty = open demo). See "Access control and limits" in the README.
+      API_KEY: "${API_KEY:-}"
+      READONLY_API_KEY: "${READONLY_API_KEY:-}"
+      MAX_UPLOAD_MB: "${MAX_UPLOAD_MB:-256}"
     depends_on: { db: { condition: service_healthy } }
     # The web container waits for this, so nginx never answers 502 while the API is still starting.
     healthcheck:

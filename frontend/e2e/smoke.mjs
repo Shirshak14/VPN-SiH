@@ -4,7 +4,8 @@
 //   2. start the UI    (cd frontend && npm run dev)
 //   3. run             (cd frontend && npm run e2e)
 //
-// Needs Node >= 22 (global WebSocket). Environment: APP_URL (default http://localhost:5173), CHROME_PATH (override browser lookup).
+// Needs Node >= 22 (global WebSocket). Environment: APP_URL (default http://localhost:5173), CHROME_PATH (override browser lookup),
+// API_KEY (set it when the API runs with API_KEY: the test then also exercises the sign-in form, with a wrong key first).
 // It uploads data/captures/synthetic/demo_gateway_audit.pcap and clicks a bundled scenario, so it creates two analyses; both are deleted at the end.
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -15,6 +16,8 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 const BASE = (process.env.APP_URL || "http://localhost:5173").replace(/\/$/, "");
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const KEY = process.env.API_KEY || "";
+const AUTH = KEY ? { "X-API-Key": KEY } : {};  // node-side requests; the browser signs in through the UI
 const PCAP = path.resolve(HERE, "../../data/captures/synthetic/demo_gateway_audit.pcap");
 
 function findBrowser() {
@@ -40,7 +43,7 @@ let ws, failures = 0;
 const problems = [];
 
 async function cleanup() {
-  for (const id of created) { try { await fetch(`${BASE}/api/analyses/${id}`, { method: "DELETE" }); } catch { /* best effort */ } }
+  for (const id of created) { try { await fetch(`${BASE}/api/analyses/${id}`, { method: "DELETE", headers: AUTH }); } catch { /* best effort */ } }
   try { ws?.close(); } catch { /* ignore */ }
   chrome.kill();
   await sleep(300);
@@ -74,12 +77,25 @@ try {
   const waitFor = async (fn, args = [], ms = 20000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { if (await run(fn, ...args)) return true; } catch { /* page not ready */ } await sleep(200); } return false; };
   const check = (name, ok, extra = "") => { if (!ok) failures++; console.log((ok ? "PASS " : "FAIL ") + name + (extra ? "  " + extra : "")); };
   const nav = async (url) => { await send("Page.navigate", { url }); await sleep(300); };
-  const api = async (p) => (await fetch(BASE + p)).json();
+  const api = async (p) => (await fetch(BASE + p, { headers: AUTH })).json();
   const pct = (v) => (v == null ? "n/a" : (v * 100).toFixed(1) + "%");
   const hash = () => run(() => location.hash);
   const clickNav = (label) => run((l) => [...document.querySelectorAll("nav a")].find((a) => a.textContent === l).click(), label);
 
   await send("Runtime.enable"); await send("Page.enable"); await send("Log.enable"); await send("DOM.enable");
+
+  // ---- 0. sign-in (only when the API is started with API_KEY)
+  await nav(BASE + "/");
+  if (KEY) {
+    check("locked server shows the sign-in form, not the app", await waitFor(() => !!document.querySelector("form.login") && !document.querySelector(".az-samples")));
+    const typeKey = async (text) => { await run(() => { const i = document.getElementById("api-key"); i.focus(); i.select(); }); await send("Input.insertText", { text }); };
+    await typeKey("definitely-wrong"); await run(() => document.querySelector("form.login button.primary").click());
+    check("wrong key shows an error and stays locked", await waitFor(() => !!document.querySelector("form.login [role=alert]")) && await run(() => !document.querySelector(".az-samples")));
+    await typeKey(KEY); await run(() => document.querySelector("form.login button.primary").click());
+    check("correct key unlocks the app", await waitFor(() => !document.querySelector("form.login") && document.querySelectorAll(".az-samples li").length > 5));
+    check("signed-in session shows Sign out", await run(() => !!document.querySelector("button.linklike")));
+    problems.length = 0;  // the browser logs every deliberate 401 (locked state, wrong key); only errors after sign-in count
+  }
 
   // ---- 1. root URL and navigation
   await nav(BASE + "/");
@@ -119,7 +135,7 @@ try {
   check("an uploaded capture is labelled user upload, not synthetic", await run(() => document.querySelector("h1 .badge")?.textContent.toLowerCase() === "user upload" && !document.querySelector(".banner.compact")));
   check("table keeps all six columns", (await run(() => [...document.querySelectorAll("thead th")].map((t) => t.textContent).join("|"))) === "Risk|Peers|Mode|Negotiated IKE suite|Findings|Anomaly");
   for (const [file, type] of [["report.pdf", "pdf"], ["export.json", "json"], ["export.syslog", "text"]]) {
-    const r = await fetch(`${BASE}/api/analyses/${aid}/${file}`); await r.arrayBuffer();
+    const r = await fetch(`${BASE}/api/analyses/${aid}/${file}`, { headers: AUTH }); await r.arrayBuffer();
     check(`download ${file} works`, r.status === 200 && (r.headers.get("content-type") || "").includes(type), r.headers.get("content-type"));
   }
 

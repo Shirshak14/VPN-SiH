@@ -128,16 +128,38 @@ class IkeMessage:
 
 
 @dataclass
-class EspPacket:
-    frame: int
-    ts: float
+class EspFlowStats:
+    """Running per-flow ESP/AH statistics, accumulated while the capture streams (memory is O(flows), not O(packets))."""
+    spi: int
     src: str
     dst: str
-    proto: int  # 50 ESP, 51 AH
-    spi: int
-    seq: int
-    length: int
+    proto: int
+    first_ts: float
+    seq_first: int
+    packets: int = 0
+    bytes: int = 0
+    last_ts: float = 0.0
+    seq_max: int = 0
+    seq_last: int = 0
+    seq_gaps: int = 0  # missing sequence numbers (each jump counted up to 65535)
+    seq_replays: int = 0  # packets whose seq <= highest seen
+    iat_sum: float = 0.0  # sum of consecutive frame-order timestamp differences
     udp_encap: bool = False
+
+    def add(self, ts: float, seq: int, length: int, udp_encap: bool) -> None:
+        if self.packets == 0:
+            self.seq_max = seq
+        else:
+            self.iat_sum += ts - self.last_ts
+            if seq > self.seq_max:
+                self.seq_gaps += min(seq - self.seq_max - 1, 65535)
+                self.seq_max = seq
+            else:
+                self.seq_replays += 1
+        self.packets += 1
+        self.bytes += length
+        self.last_ts, self.seq_last = ts, seq
+        self.udp_encap = self.udp_encap or udp_encap
 
 
 @dataclass
@@ -161,5 +183,5 @@ class CaptureStats:
 class ParsedCapture:
     path: str
     ike: list[IkeMessage]
-    esp: list[EspPacket]
+    esp_flows: list[EspFlowStats]
     stats: CaptureStats
