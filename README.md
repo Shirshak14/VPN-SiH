@@ -51,7 +51,7 @@ cd frontend && npm ci && npm run dev                                     # http:
 `npm ci` may print a harmless warning that esbuild's postinstall script is not pre-approved; the build works regardless.
 
 **UI smoke test.** With the API and the UI running, `cd frontend && npm run e2e` drives a real browser through upload, a bundled scenario, the results page, a tunnel, and the Evaluation page,
-checking every figure against the API (needs Node 22+ and Chrome, Chromium or Edge; it deletes the analyses it creates).
+checking every figure against the API (needs Node 22+ and Chrome, Chromium or Edge; it deletes the analyses it creates). CI runs it on every push and pull request (`e2e` job); it passes `--no-sandbox` automatically when run as root, e.g. in a container.
 
 **About `docs/EVAL.json`.** Regenerating it rewrites two run-dependent fields, `generated_at` and `throughput` (packets/s varies from run to run), so the file shows as modified even when nothing changed.
 The Evaluation page displays both, so they stay in the file. To check that the *metrics* reproduce, compare everything else:
@@ -83,11 +83,11 @@ Optional: `DATABASE_URL=postgresql+psycopg2://…` to use PostgreSQL, `POLICY_PA
 * **Rule engine** (`backend/policy/nist_rfc8221.yaml`): algorithm tiers, thresholds, severities, references, MITRE mapping and remediation are data.
   Edit the YAML — no code change — to change what is flagged. The tiering is this project's reading of the cited documents (document-level
   references only); thresholds marked "site policy" (IKE lifetime, retransmit count, ESP ratios) are not NIST/RFC numbers.
-* **Anomaly layer**: seven small Isolation Forests (handshake size, timing, reliability, proposal pattern, rekey rate, ESP sequencing), fitted on
+* **Anomaly layer**: six small Isolation Forests (first-message size, message size, handshake timing, reliability, proposal pattern, rekey rate), fitted on
   benign tunnels only, calibrated on **out-of-fold** benign scores; tunnel score = max group score, flagged when above the benign 99th percentile. A single
-  forest over all features was tried first and missed single-signal anomalies. The PyTorch autoencoder from the brief was **not built**.
+  forest over all features was tried first and missed single-signal anomalies. Three further **benign-envelope** groups (response time, retransmissions, half-open handshakes) are plain calibrated statistics rather than forests, because a forest cannot rank "far outside the training range" above "just outside it". The PyTorch autoencoder from the brief was **not built**.
 * **Explainability**: `shap.TreeExplainer` on the dominant group's fitted forest, computed per request. When a group's benign training data is
-  constant (ESP sequencing) the forest has no splits and SHAP is undefined; the UI then says so instead of inventing values.
+  constant (ESP sequencing) the forest has no splits and SHAP is undefined; the UI then says so instead of inventing values. For an envelope group the "why" panel shows each feature's deviation from the benign median in units of the benign median-to-p99 span, and says it is not SHAP.
 * **Risk score**: `risk = 100·(1−(1−R)(1−A))`, `R = 1−∏(1−w_severity)`, `A = 0.30 × anomaly score`. Weights live in the policy YAML; the formula is shown on every tunnel.
 * **MITRE ATT&CK**: curated in the YAML (T1040, T1557, T1110.002, T1600). T1600 "Weaken Encryption" is the closest analogue for protocol downgrade, not an exact fit.
 
@@ -97,19 +97,19 @@ Optional: `DATABASE_URL=postgresql+psycopg2://…` to use PostgreSQL, `POLICY_PA
 
 | Detector | Precision | Recall | F1 | False-positive rate |
 |---|---|---|---|---|
-| Rules + AI | 97.8 % | 84.3 % | 0.905 | 3.3 % |
-| Rule engine only | 100 % | 72.2 % | 0.839 | 0 % |
-| Anomaly model only | 90.0 % | 16.7 % | 0.281 | 3.3 % |
-| Rules + AI, **no decryption keys** | 97.6 % | 74.1 % | 0.842 | 3.3 % |
+| Rules + AI | 97.3 % | 99.1 % | 0.982 | 5.0 % |
+| Rule engine only | 100 % | 77.8 % | 0.875 | 0 % |
+| Anomaly model only | 91.9 % | 31.5 % | 0.469 | 5.0 % |
+| Rules + AI, **no decryption keys** | 97.0 % | 88.9 % | 0.928 | 5.0 % |
 
-* Rule-level (assessable rules, keys supplied): 282 TP / 0 FP / 0 FN. Near-perfect because it checks deterministic policy against known configurations.
+* Rule-level (assessable rules, keys supplied): 288 TP / 0 FP / 0 FN. Near-perfect because it checks deterministic policy against known configurations.
 * **Real strongSwan lab traffic (23 tunnels, keys from charon log):** rule-level **41 TP / 0 FP / 0 FN** vs the configs we wrote; detection 10/10 weak/downgrade tunnels found, 0/13 false alarms on benign (precision/recall 1.0). The anomaly model alone flagged 0 of 13 real benign tunnels (no false alarms despite being trained only on simulated traffic) and 0 of 10 weak ones — expected, since they are crypto-weak, not behaviourally odd; the lab has no behavioural-anomaly scenarios, so the AI layer's recall is **untested on real traffic**. 23 tunnels from one lab setup on one host is small.
 * Parse accuracy on simulated captures: 100 % for IKE datagram count, ESP packet count, tunnel reconstruction, IKE version, negotiated IKE suite, auth method and child-SA suite (consistency check — same authors wrote encoder and decoder).
 * **Parser vs independent oracles on real public captures: 33/33** — decrypted AUTH payload bytes equal Wireshark's expected values for all 8 IKEv2 captures; message/packet counts and IKEv1 transform attributes agree with Scapy's separate ISAKMP dissector. For IKEv1 key-assisted decryption there is no plaintext oracle, so the checks are structural: all 25 encrypted messages in the 3 captures open into valid payload chains, and every decrypted HASH payload is exactly the negotiated hash's digest length (16 B MD5, 32 B SHA-256), which a wrong key or IV would not produce. These are small captures (4–16 packets).
 * Real lab traffic also found two of *our* mistakes: strongSwan omits the DH transform in the initial child SA even with PFS configured, so `ESP-NO-PFS` now judges PFS only from observed rekeys (otherwise "PFS not assessable"), and the simulator's model of this was corrected.
 * Throughput (single thread, laptop): parse ≈ 23k–110k packets/s (13–60 MB/s) and end-to-end incl. rules, model and SHAP ≈ 18k–80k packets/s across runs — this machine's timings were noisy; re-run before quoting (309 captures, 88k packets, 48 MB).
 
-Where the AI layer is weak (from `docs/EVAL.json`): slow-relay latency 0/6, retransmit burst 1/6, half-open scan probes 1/6 are **missed**. Oversize handshakes (6/6) and rekey storms (5/6) are caught. Isolation Forest struggles with rare discrete values; this is the clearest place an autoencoder or richer features would help. These behavioural families exist only in the simulator.
+Behavioural families (all simulator-only, designed by us): oversize handshakes 6/6, slow relay 6/6, retransmit burst 6/6, half-open scan 6/6, rekey storm 5/6, ESP replay 6/6 (rules). Slow relay, retransmit burst and half-open scan were 0/6, 1/6 and 1/6 before the "benign envelope" groups and the `IKE-HALF-OPEN-FLOOD` rule were added. Two things were wrong: an Isolation Forest scores any value beyond the training range the same, so a 600 ms relay looked no worse than a benign 99th-percentile sample; and a scan is many separate half-open handshakes, invisible to per-tunnel features. The fix is deliberately modest and is **not machine learning**: a calibrated benign-baseline envelope (median / 99th percentile in log space, flagged at p99 + 0.5 span) for response time, retransmissions and unanswered handshakes, plus a count of unanswered handshakes per source/target. Response time is now measured from the *last* transmission, so a lost packet and its retransmit timer is not mistaken for a slow peer. The false-positive rate rose from 2 to 3 of 60 benign tunnels (all three are forest groups, after retraining). Treat these numbers as consistency checks on simulated data; the thresholds were chosen on the same simulator, and the strongSwan lab has no behavioural scenarios yet, so none of this is validated on real traffic.
 
 ## API
 
@@ -125,4 +125,4 @@ Where the AI layer is weak (from `docs/EVAL.json`): slow-relay latency 0/6, retr
 * Single-file in-memory analysis with a 64 MB upload cap; streaming/chunked ingest is the documented upgrade path. No authentication/RBAC (single-user demo).
 * WireGuard/OpenVPN: roadmap only.
 * Risk weights and bands are judgment calls, not calibrated against incident data.
-* The UI was exercised in headless Edge against the real API (upload → results → detail → evaluation) with no failed requests; it has no automated frontend tests.
+* The UI was exercised in headless Edge against the real API (upload → results → detail → evaluation) with no failed requests; its only automated frontend test is the browser smoke test above (no component or unit tests).

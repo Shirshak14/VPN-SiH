@@ -15,6 +15,16 @@ not judged against a threshold fitted to points the forest has already seen.
 
 Explanations come from `shap.TreeExplainer` on the fitted forest of the dominant group.
 Nothing is precomputed or hard-coded.
+
+Benign-envelope groups (not a forest): an Isolation Forest cannot tell "far outside the training range" from
+"just outside it" -- every point beyond the edge isolates after the same few splits -- so a relay adding 600 ms
+scores barely above a benign 99th-percentile sample. For quantities that only matter in one direction (latency,
+retransmissions, unanswered handshakes) a plain calibrated envelope is used alongside the forests:
+
+    z     = (log1p(x) - log1p(median_benign)) / max(log1p(p99_benign) - log1p(median_benign), floor)
+    score = clip(0.5 * z / (1 + MARGIN), 0, 1)       -> flagged (> 0.5) once x is MARGIN spans past the benign p99
+
+This is a statistical baseline, not machine learning; the UI labels its explanation accordingly.
 """
 from __future__ import annotations
 
@@ -38,6 +48,13 @@ SPAN_FLOOR = 0.03  # minimum calibration span so near-constant benign groups don
 
 # ESP replay/gap ratios are deliberately NOT modelled: they are exactly zero in every benign tunnel, so a
 # forest has nothing to learn from (degenerate trees); the rule engine covers them deterministically.
+ENVELOPE_MARGIN = 0.5   # flag at p99 + 0.5 spans, so benign tunnels just past the sample p99 do not alert
+ENVELOPE_FLOOR = 0.9    # minimum log-span (~x2.5): near-constant benign features (0 retransmits) need a real jump
+ENVELOPES: dict[str, list[str]] = {
+    "response time": ["first_rtt_ms", "max_hs_gap_ms"],
+    "retransmissions": ["retransmits", "max_retransmit_streak"],
+    "half-open handshakes": ["half_open_peers"],
+}
 GROUPS: dict[str, list[str]] = {
     "first message size": ["first_msg_bytes"],
     "message size": ["mean_msg_bytes"],
@@ -46,6 +63,7 @@ GROUPS: dict[str, list[str]] = {
     "proposal pattern": ["ike_version", "aggressive", "n_offered"],
     "rekey rate": ["create_child_per_min"],
 }
+ALL_GROUPS: dict[str, list[str]] = {**GROUPS, **ENVELOPES}
 
 
 @dataclass
@@ -55,9 +73,10 @@ class ModelMeta:
     calibration: dict[str, dict[str, float]]  # group -> {median, p99}
     feature_medians: dict[str, float]
     trained_on: list[str] = field(default_factory=list)
+    envelope: dict[str, dict[str, float]] = field(default_factory=dict)  # feature -> {median, p99, span} (log1p space)
 
     def to_dict(self) -> dict[str, Any]:
-        return {**self.__dict__, "groups": GROUPS}
+        return {**self.__dict__, "groups": GROUPS, "envelopes": ENVELOPES}
 
 
 class AnomalyModel:
@@ -83,8 +102,14 @@ class AnomalyModel:
                 fold = IsolationForest(n_estimators=100, max_samples=min(256, len(tr)), random_state=seed).fit(X[tr])
                 raw[te] = -fold.score_samples(X[te])
             calib[g] = {"median": float(np.median(raw)), "p99": float(np.percentile(raw, 99))}
+        env: dict[str, dict[str, float]] = {}
+        for cols in ENVELOPES.values():
+            for c in cols:
+                v = np.log1p([r[c] for r in rows])
+                med, p99 = float(np.median(v)), float(np.percentile(v, 99))
+                env[c] = {"median": med, "p99": p99, "span": max(p99 - med, ENVELOPE_FLOOR)}
         meta = ModelMeta(len(rows), n_estimators, calib,
-                         {n: float(np.median([r[n] for r in rows])) for n in F.FEATURE_LABELS}, names)
+                         {n: float(np.median([r[n] for r in rows])) for n in F.FEATURE_LABELS}, names, env)
         return cls(forests, meta, engine)
 
     # ------------------------------------------------------------------ scoring
@@ -95,17 +120,45 @@ class AnomalyModel:
         span = max(c["p99"] - c["median"], SPAN_FLOOR)
         return float(min(max(0.5 * (raw - c["median"]) / span, 0.0), 1.0)), raw, x
 
+    def _envelope_scores(self, group: str, feats: dict[str, float]) -> dict[str, float]:
+        """Per-feature envelope score and signed deviation (in benign spans) for one envelope group."""
+        out = {}
+        for c in ENVELOPES[group]:
+            e = getattr(self.meta, "envelope", {}).get(c)
+            if e is None:
+                continue
+            out[c] = (float(np.log1p(feats[c])) - e["median"]) / e["span"]
+        return out
+
     def score(self, t: Tunnel, top_k: int = 5) -> dict[str, Any]:
         feats = F.extract(t, self.engine)
         per = {g: self._group_score(g, feats) for g in GROUPS}
-        top_g = max(per, key=lambda g: per[g][0])
-        score = per[top_g][0]
+        zs = {g: self._envelope_scores(g, feats) for g in ENVELOPES}
+        env_score = {g: float(min(max(0.5 * max(z.values()) / (1 + ENVELOPE_MARGIN), 0.0), 1.0)) if z else 0.0
+                     for g, z in zs.items()}
+        scores = {**{g: v[0] for g, v in per.items()}, **env_score}
+        top_g = max(scores, key=lambda g: scores[g])
+        score = scores[top_g]
         return {
             "score": round(score, 4), "is_anomalous": score > 0.5, "threshold": 0.5, "dominant_group": top_g,
-            "groups": [{"group": g, "score": round(s, 4), "features": GROUPS[g]} for g, (s, _r, _x) in
-                       sorted(per.items(), key=lambda kv: -kv[1][0])],
+            "groups": [{"group": g, "score": round(v, 4), "features": ALL_GROUPS[g]} for g, v in
+                       sorted(scores.items(), key=lambda kv: -kv[1])],
             "features": feats,
-            "explanation": self._explain(top_g, per[top_g][2], top_k),
+            "explanation": (self._explain_envelope(top_g, zs[top_g], feats, top_k) if top_g in ENVELOPES
+                            else self._explain(top_g, per[top_g][2], top_k)),
+        }
+
+    def _explain_envelope(self, group: str, zs: dict[str, float], feats: dict[str, float], top_k: int) -> dict[str, Any]:
+        """Deviation of each feature from the benign baseline, in units of the benign median-to-p99 span."""
+        rows = sorted(zs.items(), key=lambda kv: -abs(kv[1]))[:top_k]
+        return {
+            "method": "Deviation from the benign envelope (value vs benign median and 99th percentile; not SHAP)",
+            "group": group,
+            "top_features": [{
+                "feature": c, "label": F.FEATURE_LABELS[c], "value": round(feats[c], 4),
+                "baseline_median": round(self.meta.feature_medians[c], 4), "shap": round(float(z), 3),
+                "direction": "raises anomaly" if z > 0 else "lowers anomaly",
+            } for c, z in rows],
         }
 
     def _explain(self, group: str, x: np.ndarray, top_k: int) -> dict[str, Any]:
