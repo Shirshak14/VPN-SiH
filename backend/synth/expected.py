@@ -62,6 +62,8 @@ def expected_rules(spec, policy: Policy, flow_stats: list[tuple[int, int, int]])
         pr = [r for r in (_rank(policy, s, v1) for s in spec.prior_reject) if r is not None]
         if pr and max(pr) >= 2:
             exp.add("SA-DOWNGRADE")
+    if spec.half_open_attempts >= th["half_open_alert"]:
+        exp.add("IKE-HALF-OPEN-FLOOD")
     if spec.retransmits >= th["retransmit_alert"]:
         exp.add("SA-RETRANSMIT-EXCESS")
     for pk, rep, gap in flow_stats:

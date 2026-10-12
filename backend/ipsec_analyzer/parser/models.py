@@ -64,6 +64,8 @@ class PayloadSet:
     v1_proposals: list[V1Proposal] = field(default_factory=list)  # IKEv1 SA
     ke_group: int | None = None
     ke_len: int = 0
+    ke_data: bytes = b""  # IKEv1 only: the raw KE value (needed to derive the phase-1 IV)
+    hash_len: int = 0  # IKEv1 HASH payload length
     nonce_len: int = 0
     notifies: list[Notify] = field(default_factory=list)
     vendor_ids: list[bytes] = field(default_factory=list)

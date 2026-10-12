@@ -185,10 +185,16 @@ def _v2_notify(body: bytes) -> Notify:
 def _parse_v1(msg: IkeMessage, first: int, body: bytes) -> None:
     if msg.flags & C.V1_FLAG_ENCRYPT:
         # Everything after the header is encrypted (Main Mode msgs 5-6, Quick Mode, Informational
-        # after phase 1). Payload contents are opaque without SKEYID_e.
+        # after phase 1). Payload contents are opaque unless an IKEv1 encryption key is supplied
+        # (parser.decrypt_v1), which re-runs `parse_v1_payloads` on the plaintext.
         msg.encrypted_v1 = True
         msg.enc_body, msg.enc_first_payload = body, first
         return
+    msg.clear = parse_v1_payloads(first, body)
+
+
+def parse_v1_payloads(first: int, body: bytes) -> PayloadSet:
+    """Decode a chain of IKEv1 payloads (cleartext message bodies and decrypted ones)."""
     ps = PayloadSet()
     try:
         for ptype, _crit, pbody, _nxt in _walk(first, body):
@@ -197,6 +203,7 @@ def _parse_v1(msg: IkeMessage, first: int, body: bytes) -> None:
                 ps.v1_proposals.extend(_v1_sa(pbody))
             elif ptype == C.V1_KE:
                 ps.ke_len = len(pbody)
+                ps.ke_data = bytes(pbody)
             elif ptype == C.V1_NONCE:
                 ps.nonce_len = len(pbody)
             elif ptype == C.V1_NOTIFY:
@@ -207,13 +214,15 @@ def _parse_v1(msg: IkeMessage, first: int, body: bytes) -> None:
                 ps.vendor_ids.append(bytes(pbody))
             elif ptype in (C.V1_HASH, 9):
                 ps.has_hash = True
+                if ptype == C.V1_HASH:
+                    ps.hash_len = len(pbody)  # (a SIG payload's length is the signature size, not a digest)
             elif ptype in C.V1_NATD:
                 ps.nat_d_count += 1
             elif ptype in (6, 7):
                 ps.cert_count += 1
     except struct.error as e:  # pragma: no cover - defensive
         raise IkeParseError(f"IKEv1 struct error: {e}") from e
-    msg.clear = ps
+    return ps
 
 
 def _v1_sa(body: bytes) -> list[V1Proposal]:

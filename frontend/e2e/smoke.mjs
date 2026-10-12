@@ -36,7 +36,8 @@ if (!browser) { console.error("No Chrome/Chromium/Edge found. Set CHROME_PATH.")
 try { await fetch(BASE + "/api/health"); } catch { console.error(`App not reachable at ${BASE} (start the API and the UI first).`); process.exit(2); }
 
 const profile = mkdtempSync(path.join(tmpdir(), "ipsec-smoke-"));
-const chrome = spawn(browser, ["--headless=new", "--disable-gpu", "--remote-debugging-port=0", "--user-data-dir=" + profile, "--window-size=1366,900", "about:blank"], { stdio: "ignore" });
+const asRoot = process.getuid?.() === 0;  // Chrome refuses to start its sandbox as root (containers); a throwaway profile is fine without it
+const chrome = spawn(browser, ["--headless=new", "--disable-gpu", ...(asRoot ? ["--no-sandbox"] : []), "--remote-debugging-port=0", "--user-data-dir=" + profile, "--window-size=1366,900", "about:blank"], { stdio: "ignore" });
 const created = [];
 let ws, failures = 0;
 const problems = [];
