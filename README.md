@@ -77,7 +77,7 @@ Optional: `DATABASE_URL=postgresql+psycopg2://…` to use PostgreSQL, `POLICY_PA
   is not installed here); Scapy's independent ISAKMP dissector is used as a cross-check instead.
 * **Decryption (optional)**: IKEv2 encrypts authentication and child SAs. Given a Wireshark-format `ikev2_decryption_table` (keys) the parser opens
   SK/SKF payloads (AES-CBC/CTR/GCM/CCM, 3DES/DES) and reassembles RFC 7383 fragments. **Without keys those facts are reported as "not assessable", never guessed.**
-  IKEv1 Quick Mode (ESP transforms, PFS) is likewise unobservable; IKEv1 key-assisted decryption is not implemented.
+  IKEv1 Quick Mode (ESP transforms, PFS) is likewise encrypted. Given Wireshark's two-column `ikev1_decryption_table` (initiator cookie, expanded phase-1 encryption key) the parser derives the CBC IVs per RFC 2409 Appendix B (DES, 3DES, AES-CBC; MD5/SHA-1/SHA-2 for the IV hash), opens phase-1 and Quick Mode messages, and the child ESP suite and PFS (a KE payload in Quick Mode) become assessable. One key file may hold IKEv1 and IKEv2 rows. A wrong key is reported as a decryption failure, never guessed. Not covered: the analyzer does not derive keys from a PSK itself (you must supply the key), and a key table exported from a real strongSwan/Libreswan lab is untested.
 * **SA reconstruction**: one tunnel per initiator SPI; offered vs negotiated suites, auth method, retransmits, cookies, fragments, DPD, rekeys, ESP
   flows (sequence gaps/replays), and earlier failed attempts between the same endpoints (for downgrade detection).
 * **Rule engine** (`backend/policy/nist_rfc8221.yaml`): algorithm tiers, thresholds, severities, references, MITRE mapping and remediation are data.
@@ -105,7 +105,7 @@ Optional: `DATABASE_URL=postgresql+psycopg2://…` to use PostgreSQL, `POLICY_PA
 * Rule-level (assessable rules, keys supplied): 282 TP / 0 FP / 0 FN. Near-perfect because it checks deterministic policy against known configurations.
 * **Real strongSwan lab traffic (23 tunnels, keys from charon log):** rule-level **41 TP / 0 FP / 0 FN** vs the configs we wrote; detection 10/10 weak/downgrade tunnels found, 0/13 false alarms on benign (precision/recall 1.0). The anomaly model alone flagged 0 of 13 real benign tunnels (no false alarms despite being trained only on simulated traffic) and 0 of 10 weak ones — expected, since they are crypto-weak, not behaviourally odd; the lab has no behavioural-anomaly scenarios, so the AI layer's recall is **untested on real traffic**. 23 tunnels from one lab setup on one host is small.
 * Parse accuracy on simulated captures: 100 % for IKE datagram count, ESP packet count, tunnel reconstruction, IKE version, negotiated IKE suite, auth method and child-SA suite (consistency check — same authors wrote encoder and decoder).
-* **Parser vs independent oracles on real public captures: 27/27** — decrypted AUTH payload bytes equal Wireshark's expected values for all 8 IKEv2 captures; message/packet counts and IKEv1 transform attributes agree with Scapy's separate ISAKMP dissector. These are small captures (4–16 packets).
+* **Parser vs independent oracles on real public captures: 33/33** — decrypted AUTH payload bytes equal Wireshark's expected values for all 8 IKEv2 captures; message/packet counts and IKEv1 transform attributes agree with Scapy's separate ISAKMP dissector. For IKEv1 key-assisted decryption there is no plaintext oracle, so the checks are structural: all 25 encrypted messages in the 3 captures open into valid payload chains, and every decrypted HASH payload is exactly the negotiated hash's digest length (16 B MD5, 32 B SHA-256), which a wrong key or IV would not produce. These are small captures (4–16 packets).
 * Real lab traffic also found two of *our* mistakes: strongSwan omits the DH transform in the initial child SA even with PFS configured, so `ESP-NO-PFS` now judges PFS only from observed rekeys (otherwise "PFS not assessable"), and the simulator's model of this was corrected.
 * Throughput (single thread, laptop): parse ≈ 23k–110k packets/s (13–60 MB/s) and end-to-end incl. rules, model and SHAP ≈ 18k–80k packets/s across runs — this machine's timings were noisy; re-run before quoting (309 captures, 88k packets, 48 MB).
 
@@ -120,7 +120,7 @@ Where the AI layer is weak (from `docs/EVAL.json`): slow-relay latency 0/6, retr
 ## Honest list of corners cut
 
 * Lab traffic is strongSwan-only (no Libreswan), one host, LAN-like latency; no CIC-IDS2018 (not IPsec-labelled, not used); no live NIC capture — the UI's "Replay capture" animates a stored handshake timeline.
-* PyShark/TShark not used; autoencoder not built; IKEv1 phase-2 and keyless IKEv2 child SAs not observable; IKEv1 encrypted-payload decryption not implemented.
+* PyShark/TShark not used; autoencoder not built; IKEv1 phase-2 and keyless IKEv2 child SAs not observable without keys (IKEv1 Quick Mode needs a supplied key table; none was produced from the lab yet).
 * IKEv2 NAT-T is handled (marker, UDP-encapsulated ESP) but only exercised lightly; IPv6 decoding is minimal; AH is counted, not analysed in depth.
 * Single-file in-memory analysis with a 64 MB upload cap; streaming/chunked ingest is the documented upgrade path. No authentication/RBAC (single-user demo).
 * WireGuard/OpenVPN: roadmap only.

@@ -82,8 +82,8 @@ def _payload_label(m: IkeMessage) -> str:
     ps = m.payloads
     types = [t for t in ps.types if t not in (46, 53)] if m.version == 2 else ps.types
     lab = ", ".join(names.get(t, str(t)) for t in types)
-    if m.encrypted_v1:
-        return "encrypted (IKEv1 phase-1 keys unavailable)"
+    if m.encrypted_v1 and m.decrypted is None:
+        return "encrypted (IKEv1 decryption failed)" if m.decrypt_error else "encrypted (IKEv1 phase-1 keys unavailable)"
     if m.enc_body is not None and m.decrypted is None:
         return (lab + " + " if lab else "") + "SK[encrypted]"
     return lab
@@ -170,7 +170,7 @@ def _build_tunnel(msgs: list[IkeMessage], cap: ParsedCapture) -> Tunnel | None:
             ts=m.ts, frame=m.frame, direction="I->R" if from_initiator(m) else "R->I",
             label=f"{_exch_name(m)} {'response' if m.is_response else 'request'}"
             if v == 2 else f"{_exch_name(m)}",
-            size=m.length, encrypted=(m.enc_body is not None and m.decrypted is None) or m.encrypted_v1,
+            size=m.length, encrypted=(m.enc_body is not None or m.encrypted_v1) and m.decrypted is None,
             retransmit=retrans, notes=([_payload_label(m)] if _payload_label(m) else []) + notes,
         ))
         if v == 1 and C.V1_FRAG in m.clear.types:
@@ -241,9 +241,50 @@ def _fill_negotiation(t: Tunnel, msgs: list[IkeMessage], from_initiator) -> None
             t.auth_method, t.auth_observable = t.offered[0].auth, True
         t.dpd_messages = sum(1 for m in msgs if m.exch == C.V1_INFO)
         t.create_child_exchanges = len({m.msg_id for m in msgs if m.exch == C.V1_QUICK})
-        if any(m.exch == C.V1_QUICK for m in msgs):
+        _collect_quick_mode(t, msgs, from_initiator)
+        if t.create_child_exchanges and not t.child_observable:
+            failed = next((m.decrypt_error for m in msgs if m.exch == C.V1_QUICK and m.decrypt_error), None)
             t.notes.append("IKEv1 Quick Mode is fully encrypted: ESP transforms and PFS are not observable "
-                           "without phase-1 keys.")
+                           "without phase-1 keys." + (f" Decryption was attempted but failed: {failed}." if failed else ""))
+
+
+def _quick_suite(p) -> Suite:
+    """Suite of an IKEv1 Quick Mode ESP/AH proposal (IPsec DOI attribute registry, RFC 2407 §4.5)."""
+    tr = p.transforms[0]
+    a = tr.attrs
+    names = C.V1_ESP_TRANSFORM if p.protocol == C.PROTO_ESP else {}
+    return Suite(
+        encr=names.get(tr.id, f"ESP_{tr.id}") if p.protocol == C.PROTO_ESP else None,
+        encr_bits=a.get(C.A2_KEYLEN),
+        integ=C.V1_IPSEC_AUTH.get(a.get(C.A2_AUTH), f"AUTH_{a.get(C.A2_AUTH)}") if C.A2_AUTH in a else None,
+        dh=C.DH_GROUP.get(a.get(C.A2_GROUP), f"GROUP_{a.get(C.A2_GROUP)}") if C.A2_GROUP in a else None,
+        lifetime_s=a.get(C.A2_LIFE_DUR) if a.get(C.A2_LIFE_TYPE, 1) == 1 else None,
+    )
+
+
+def _collect_quick_mode(t: Tunnel, msgs: list[IkeMessage], from_initiator) -> None:
+    """Child SAs from decrypted Quick Mode exchanges: the initiator's offer carries its SPI and the KE (PFS) payload,
+    the responder's answer carries the chosen proposal and its SPI. Retransmissions are ignored."""
+    by_id: dict[int, list[IkeMessage]] = defaultdict(list)
+    for m in msgs:
+        if m.exch == C.V1_QUICK and m.decrypted is not None and m.decrypted.v1_proposals:
+            by_id[m.msg_id].append(m)
+    for _mid, group in sorted(by_id.items(), key=lambda kv: kv[1][0].ts):
+        offer = next((m for m in group if from_initiator(m)), None)
+        answer = next((m for m in group if not from_initiator(m)), None)
+        if offer is None or answer is None:
+            continue
+        p = next((q for q in answer.decrypted.v1_proposals if q.protocol in (C.PROTO_ESP, C.PROTO_AH) and q.transforms), None)
+        if p is None:
+            continue
+        op = next((q for q in offer.decrypted.v1_proposals if q.protocol == p.protocol and q.spi), None)
+        suite = _quick_suite(p)
+        t.child_sas.append(ChildSa(
+            protocol=C.PROTO_NAME.get(p.protocol, "ESP"), via="Quick Mode", ts=answer.ts, suite=suite,
+            spi_initiator=op.spi.hex() if op else None, spi_responder=p.spi.hex() or None,
+            pfs=offer.decrypted.ke_len > 0, dh_offered=suite.dh is not None,
+        ))
+    t.child_observable = bool(t.child_sas)
 
 
 def _collect_child_v2(t: Tunnel, msgs: list[IkeMessage], m: IkeMessage, ps) -> None:
