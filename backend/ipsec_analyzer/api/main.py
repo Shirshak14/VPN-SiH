@@ -276,3 +276,10 @@ def compare_analyses(before: int, after: int, s: Session = Depends(db)) -> dict[
         raise HTTPException(400, "pick two different analyses")
     a, b = _done(s, before), _done(s, after)
     return {"before_analysis": _analysis_dict(a), "after_analysis": _analysis_dict(b), **compare(_tunnels(s, before), _tunnels(s, after))}
+
+
+# Single-container deployments (root Dockerfile, render.yaml) serve the built UI from this process too. Mounted last so
+# every /api route above takes precedence; the UI uses hash routing, so index.html is the only page it needs.
+if os.environ.get("UI_DIR"):
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/", StaticFiles(directory=os.environ["UI_DIR"], html=True), name="ui")

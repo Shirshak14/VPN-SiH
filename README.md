@@ -68,6 +68,8 @@ EOF
 Full stack (PostgreSQL + API + nginx UI): `docker compose up --build` → http://localhost:8080. Verified: stack builds, an analysis of a real-lab capture ran through nginx into PostgreSQL, and the PDF/syslog exports download.
 The UI container starts only once the API's healthcheck passes, so the page never shows a gateway error while the API boots (first start takes a minute or so). Database credentials default to the demo values and can be overridden with `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` (set them before the first `up`, since an existing `pgdata` volume keeps its original credentials).
 
+**Hosted demo (Render).** `render.yaml` deploys one free web service from the root `Dockerfile`, which builds the UI and serves it from the API process (`UI_DIR`), with SQLite inside the container: in the Render Dashboard choose *New → Blueprint* and pick this repository (it deploys the default branch). The first build takes several minutes (it regenerates the corpus and trains the model). Free instances sleep after about 15 idle minutes and wake on the next visit in about a minute, and uploaded analyses are lost on restart; the bundled captures are always available. Add `API_KEY` in the service's Environment tab before sharing the link widely. The same image runs anywhere: `docker build -t ipsec-analyzer . && docker run -p 8000:8000 ipsec-analyzer` → http://localhost:8000.
+
 Optional: `DATABASE_URL=postgresql+psycopg2://…` to use PostgreSQL, `POLICY_PATH=/path/to/custom.yaml` for a different policy pack.
 
 ## How it works
