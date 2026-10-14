@@ -24,6 +24,8 @@ plugin, so IKEv2 keys are parsed from charon's verbose log (`ike = 4`) into Wire
 (they change SPIs/keys mid-capture); strongSwan refuses Aggressive Mode + PSK unless `i_dont_care_about_security_and_use_aggressive_mode_psk = yes`
 is set, which the lab does only for that one scenario. Captures are ~20–40 s each with tcpdump on the initiator.
 
+**Behavioural lab scenarios (written, not yet captured).** `behav_slow_relay_450ms`, `behav_slow_relay_700ms`, `behav_lossy_path` (all `tc netem` on the responder's egress) and `behav_half_open_scan` (12 IKE_SA_INIT probes from `lab/scan_probe.py` at a responder with no daemon) are defined in `lab/scenarios.py` and wired into `lab/generate.py`, but no real captures exist yet: they were authored where Docker could not run. Run `python lab/generate.py behav_slow_relay_450ms behav_slow_relay_700ms behav_lossy_path behav_half_open_scan`, then `python -m ipsec_analyzer.evaluation`; the lab section of `docs/EVAL.json` will then say whether the AI layer's behavioural detection holds on real traffic. The scan-probe packet builder is covered by a test (it parses and trips `IKE-HALF-OPEN-FLOOD`); the netem and retransmit-timer settings are untested guesses and may need tuning.
+
 Consequences you should state if asked:
 * Every "weak configuration" and "downgrade" tunnel is a **lab or simulated scenario** (labelled *synthetic* or *real · strongSwan lab* in the UI, PDF and exports). None is a real incident.
 * Detection metrics below are on simulated data whose labels come from the generator's own configuration, written by the same team as the parser. They show the pipeline is internally consistent and the AI layer behaves sensibly; they are **not field detection rates**.

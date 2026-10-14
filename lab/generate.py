@@ -107,14 +107,26 @@ def run(sc: Scenario, tmp: Path) -> dict:
         # Loopback aliases give each side a local traffic-selector address to ping.
         sh("docker", "exec", ini, "ip", "addr", "add", "10.1.0.1/32", "dev", "lo")
         sh("docker", "exec", rsp, "ip", "addr", "add", "10.2.0.1/32", "dev", "lo")
-        start_charon(rsp, swanctl_conf(sc, "resp", sc.resp("ike"), sc.resp("esp")), tmp)
-        start_charon(ini, swanctl_conf(sc, "init", sc.init_ike, sc.init_esp), tmp)
+        if sc.scan_attempts:  # no IKE daemon anywhere: the probes below are never answered
+            sh("docker", "cp", str(Path(__file__).parent / "scan_probe.py"), f"{ini}:/scan_probe.py")
+        else:
+            start_charon(rsp, swanctl_conf(sc, "resp", sc.resp("ike"), sc.resp("esp")), tmp)
+            if sc.charon_extra:
+                sh("docker", "exec", ini, "sh", "-c", f"printf '%s\\n' '{sc.charon_extra}' > /etc/strongswan.d/zz-lab.conf")
+            start_charon(ini, swanctl_conf(sc, "init", sc.init_ike, sc.init_esp), tmp)
+        if sc.netem_resp:  # impair the responder's egress only, after the daemons are up
+            sh("docker", "exec", rsp, "tc", "qdisc", "add", "dev", "eth0", "root", "netem", *sc.netem_resp.split())
 
         sh("docker", "exec", "-d", ini, "sh", "-c",
            "tcpdump -i eth0 -U -w /cap.pcap 'esp or ah or udp port 500 or udp port 4500' 2>/dev/null")
         time.sleep(1.0)
 
-        ok = sh("docker", "exec", ini, "swanctl", "--initiate", "--child", "net", check=False, timeout=60).returncode == 0
+        if sc.scan_attempts:
+            sh("docker", "exec", ini, "python3", "/scan_probe.py", RESP_IP, str(sc.scan_attempts), str(sc.scan_interval),
+               timeout=int(sc.scan_attempts * sc.scan_interval) + 30)
+            ok = False
+        else:
+            ok = sh("docker", "exec", ini, "swanctl", "--initiate", "--child", "net", check=False, timeout=90).returncode == 0
         if not ok and sc.retry_ike:
             time.sleep(1.5)
             stop_charon(ini)
@@ -216,6 +228,9 @@ def main() -> None:
             "retry_ike": sc.retry_ike,
             "offered_esp": sc.init_esp,
             "expect_rules": sc.expect_rules,
+            "optional_rules": sc.optional_rules,
+            "netem_resp": sc.netem_resp,
+            "scan_attempts": sc.scan_attempts,
             "handshake_ok": res["handshake_ok"],
             "keys": f"{sc.name}.keys" if res["keys"] else None,
             "split": "lab",

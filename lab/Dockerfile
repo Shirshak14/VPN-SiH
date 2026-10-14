@@ -7,7 +7,7 @@ RUN apt-get update \
       strongswan strongswan-charon strongswan-swanctl \
       libstrongswan-standard-plugins libstrongswan-extra-plugins \
       libcharon-extra-plugins libcharon-extauth-plugins \
-      tcpdump iproute2 iputils-ping procps ca-certificates \
+      tcpdump iproute2 iputils-ping procps ca-certificates python3-minimal \
  && rm -rf /var/lib/apt/lists/*
 
 COPY charon-logging.conf /etc/strongswan.d/charon-logging.conf

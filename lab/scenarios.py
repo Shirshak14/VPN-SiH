@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-BENIGN, WEAK, DOWNGRADE = "benign", "weak-config", "downgrade"
+BENIGN, WEAK, DOWNGRADE, BEHAVIORAL = "benign", "weak-config", "downgrade", "behavioral"
 
 
 @dataclass
@@ -34,8 +34,14 @@ class Scenario:
     # "retry": after a failed first attempt, reconfigure the initiator to these proposals and retry.
     retry_ike: str = ""
     retry_esp: str = ""
+    # Behavioural scenarios (compliant crypto, abnormal network behaviour).
+    netem_resp: str = ""  # `tc qdisc ... netem <args>` on the responder's eth0 egress, e.g. "delay 450ms 40ms"
+    charon_extra: str = ""  # extra strongswan.conf text for the initiator, e.g. a short retransmit timer
+    scan_attempts: int = 0  # >0: no responder daemon; send this many IKE_SA_INIT probes with fresh SPIs instead
+    scan_interval: float = 0.3
     # Ground truth for evaluation (what a correct analyzer must report).
     expect_rules: list[str] = field(default_factory=list)
+    optional_rules: list[str] = field(default_factory=list)  # may fire without counting as a false positive
     expect_negotiated_ike: str = ""  # human-readable, e.g. "AES_CBC_256/HMAC_SHA2_256_128/MODP_2048"
     handshake_should_succeed: bool = True
 
@@ -143,5 +149,33 @@ SCENARIOS: list[Scenario] = [
         init_ike="aes256-sha256-modp3072,aes256-sha256-modp1024", resp_ike="aes256-sha256-modp1024",
         init_esp="aes256-sha256-modp3072,aes256-sha256-modp1024", resp_esp="aes256-sha256-modp1024",
         expect_rules=["SA-DOWNGRADE", "IKE-DH-WEAK"],
+    ),
+    # ---- behavioural scenarios (lab-generated; crypto is compliant, the network path is not) ----
+    # Written but not yet captured: the sandbox these were authored in has no Docker daemon. Run
+    # `python lab/generate.py behav_slow_relay_450ms behav_slow_relay_700ms behav_lossy_path behav_half_open_scan`.
+    Scenario(
+        "behav_slow_relay_450ms", BEHAVIORAL,
+        "Compliant AES-256/SHA-256/MODP-2048 tunnel with +450 ms (+-40 ms) delay on every responder packet (relay-like path)",
+        init_ike="aes256-sha256-modp2048", init_esp="aes256-sha256-modp2048", ping_count=20, ping_interval=0.3,
+        netem_resp="delay 450ms 40ms",
+    ),
+    Scenario(
+        "behav_slow_relay_700ms", BEHAVIORAL,
+        "Same compliant tunnel with +700 ms (+-60 ms) delay on every responder packet",
+        init_ike="aes256gcm16-prfsha384-ecp384", init_esp="aes256gcm16-ecp384", ping_count=15, ping_interval=0.5,
+        netem_resp="delay 700ms 60ms",
+    ),
+    Scenario(
+        "behav_lossy_path", BEHAVIORAL,
+        "Compliant tunnel over a path dropping 45% of responder packets, with a 0.4 s IKE retransmit timer so several retransmissions occur",
+        init_ike="aes256-sha256-modp2048", init_esp="aes256-sha256-modp2048", ping_count=10, ping_interval=0.5,
+        netem_resp="loss 45%", charon_extra="charon { retransmit_timeout = 0.4\n  retransmit_tries = 8 }",
+        optional_rules=["SA-RETRANSMIT-EXCESS"],
+    ),
+    Scenario(
+        "behav_half_open_scan", BEHAVIORAL,
+        "12 IKE_SA_INIT probes with fresh SPIs sent to a responder with no IKE daemon (gateway-discovery / half-open flood pattern)",
+        scan_attempts=12, scan_interval=0.3, ping_count=0,
+        expect_rules=["IKE-HALF-OPEN-FLOOD"], optional_rules=["SA-RETRANSMIT-EXCESS"], handshake_should_succeed=False,
     ),
 ]
