@@ -75,3 +75,12 @@ def test_compare_weak_vs_fixed(client):
     assert pair["delta"] < 0 and set(pair["fixed"]) == set(pair["before"]["rules"]) - set(pair["after"]["rules"])
     assert client.get(f"/api/compare?before={weak['id']}&after={weak['id']}").status_code == 400
     assert client.get(f"/api/compare?before={weak['id']}&after=99999").status_code == 404
+
+
+def test_policy_lists_every_rule_with_sources(client):
+    p = client.get("/api/policy").json()
+    assert p["name"] and len(p["rules"]) >= 10 and set(p["tiers"]) == {"encryption", "integrity", "dh"}
+    for r in p["rules"]:
+        assert r["description"] and r["refs"] and r["remediation"]["title"]
+        assert r["severity"] or r["severity_by_tier"]
+        assert [m["id"] for m in r["mitre_detail"]] == r["mitre"] and all(m["url"].startswith("https://attack.mitre.org/") for m in r["mitre_detail"])

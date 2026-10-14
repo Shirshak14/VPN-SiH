@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from ..reports.export import to_json, to_syslog
 from ..reports.pdf import build_pdf
 from ..rules.policy import SEV_ORDER
+from ..scoring import FORMULA
 from . import auth, service
 from .compare import compare
 from .db import DATA_DIR, Analysis, SessionLocal, TunnelRow, init_db
@@ -126,9 +127,13 @@ def samples() -> list[dict[str, Any]]:
 @app.get("/api/policy")
 def policy() -> dict[str, Any]:
     p = service.get_engine().policy
+    cat, rems = p.raw["mitre_catalog"], p.raw["remediations"]
     return {"name": p.name, "thresholds": p.thresholds, "tiers": p.raw["tiers"], "severity_weight": p.raw["severity_weight"],
-            "risk": p.raw["risk"], "rules": [{k: r.get(k) for k in ("id", "title", "severity", "severity_by_tier", "refs", "mitre")}
-                                            for r in p.rules]}
+            "risk": p.raw["risk"], "formula": FORMULA,
+            "rules": [{k: r.get(k) for k in ("id", "title", "severity", "severity_by_tier", "refs", "mitre", "description")}
+                      | {"mitre_detail": [{"id": m, **cat[m]} for m in r.get("mitre", [])],
+                         "remediation": {"id": r["remediation"], "title": rems[r["remediation"]]["title"]}}
+                      for r in p.rules]}
 
 
 # ------------------------------------------------------------------ analyses

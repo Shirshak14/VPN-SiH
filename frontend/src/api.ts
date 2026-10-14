@@ -56,6 +56,7 @@ export const api = {
   tunnel: (id: number, tid: string) => req<Json>(`/api/analyses/${id}/tunnels/${encodeURIComponent(tid)}`),
   remediation: (id: number) => req<Json[]>(`/api/analyses/${id}/remediation`),
   compare: (before: number, after: number) => req<Json>(`/api/compare?before=${before}&after=${after}`),
+  policy: () => req<Json>("/api/policy"),
   metrics: () => req<Json>("/api/metrics"),
   analyzeSample: (name: string) => req<Analysis>(`/api/samples/${encodeURIComponent(name)}/analyze`, { method: "POST" }),
   upload: (pcap: File, keys: File | null) => {
