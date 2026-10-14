@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Analysis, Json, api } from "../api";
 import { ErrorBox, Loading, Meter, Prov, ProvBanner, Sev } from "../ui";
+import Overview from "./Overview";
 
 const BANDS = ["critical", "high", "medium", "low", "info"];
 const VISIBLE_FINDINGS = 2;
@@ -57,10 +58,19 @@ export default function Tunnels({ aid }: { aid: number }) {
           <a className="btn sm primary" href={api.url(aid, "report.pdf")}>Download PDF report</a>
           <a className="btn sm" href={api.url(aid, "export.json")}>JSON</a>
           <a className="btn sm" href={api.url(aid, "export.syslog")}>Syslog / CEF</a>
+          <a className="btn sm" href={`#/policy/${aid}`}>Policy rules checked</a>
+          <a className="btn sm" href={`#/compare/${aid}/0`}>Compare with another capture</a>
         </div>
       </header>
 
       <ProvBanner p={a.provenance} compact />
+      {s.other_vpn?.length > 0 && (
+        <div className="banner compact" role="note">
+          <b>Other VPN traffic seen, not analysed:</b>{" "}
+          {s.other_vpn.map((v: Json) => `${v.protocol} (${v.handshake_initiations} handshake${v.handshake_initiations === 1 ? "" : "s"}, ${v.packets} packets, e.g. ${v.top_flows[0]?.flow})`).join("; ")}.
+          {" "}This tool assesses IPsec/IKE only. WireGuard has a fixed Noise cipher suite (nothing to negotiate or audit); OpenVPN negotiates its ciphers inside TLS, which is not visible without keys. Detection is by packet shape and, for OpenVPN, UDP port 1194.
+        </div>
+      )}
       {s.parse_errors?.length > 0 && <div className="banner compact">{s.ike_malformed} malformed IKE datagram(s) skipped, e.g. {s.parse_errors[0]}</div>}
 
       <section className="card res-summary" aria-label="Analysis summary">
@@ -95,6 +105,8 @@ export default function Tunnels({ aid }: { aid: number }) {
           </p>
         </div>
       </section>
+
+      <Overview tunnels={tunnels} href={href} />
 
       <section className="res-section">
         <div className="sec-head"><h2>Tunnels — highest risk first</h2><span className="small muted">select a row for full details</span></div>

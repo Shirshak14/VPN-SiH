@@ -37,3 +37,74 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run build  # tsc --noEmit && vite build
+
+  e2e:
+    # Drives the real UI in headless Chrome against the real API (upload, scenario, results, tunnel, evaluation).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/constraints.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: pip install -r backend/requirements.txt -c backend/constraints.txt
+      - name: Generate corpus and train the anomaly model
+        working-directory: backend
+        run: |
+          python -m synth.generate --out ../data/captures --benign-per-family 40
+          python -m ipsec_analyzer.ml.train
+      - run: npm ci
+        working-directory: frontend
+      - name: Start API and UI
+        run: |
+          (cd backend && nohup python -m uvicorn ipsec_analyzer.api.main:app --port 8000 > ../data/_api.log 2>&1 &)
+          (cd frontend && nohup npm run dev -- --port 5173 --strictPort > ../data/_ui.log 2>&1 &)
+          for i in $(seq 1 60); do
+            curl -fs http://localhost:8000/api/health > /dev/null && curl -fs http://localhost:5173/ > /dev/null && exit 0
+            sleep 1
+          done
+          echo "API or UI did not start"; tail -n 40 data/_api.log data/_ui.log; exit 1
+      - name: Browser smoke test
+        working-directory: frontend
+        run: npm run e2e
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+      - name: Server logs
+        if: failure()
+        run: tail -n 80 data/_api.log data/_ui.log
+
+  image:
+    # Builds the single-container image that render.yaml deploys and runs the browser smoke test against it,
+    # listening on $PORT the way Render starts it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t ipsec-analyzer .
+      - name: Start the container
+        run: |
+          docker run -d --name app -e PORT=10000 -p 10000:10000 ipsec-analyzer
+          for i in $(seq 1 90); do
+            curl -fs http://localhost:10000/api/health > /dev/null && curl -fs http://localhost:10000/ | grep -q "<div id=\"root\">" && exit 0
+            sleep 1
+          done
+          echo "container did not serve the API and UI"; docker logs app; exit 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Browser smoke test against the container
+        working-directory: frontend
+        run: npm run e2e
+        env:
+          APP_URL: http://localhost:10000
+          CHROME_PATH: /usr/bin/google-chrome
+      - name: Container logs
+        if: failure()
+        run: docker logs app | tail -n 80

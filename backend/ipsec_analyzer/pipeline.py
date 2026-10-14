@@ -17,7 +17,7 @@ from .scoring import RiskScore, score_tunnel
 class TunnelResult:
     tunnel: Tunnel
     findings: list[Finding]
-    risk: RiskScore
+    risk: RiskScore | None  # set by score_analyses
     anomaly: dict[str, Any] | None = None
 
 
@@ -41,11 +41,22 @@ def analyze(pcap: str | Path, keys: str | Path | None = None, engine: RuleEngine
     step("reconstructing SAs")
     rec = reconstruct(cap)
     step("rules + anomaly model")
-    results: list[TunnelResult] = []
-    for t in rec.tunnels:
-        findings = engine.evaluate(t)
-        anomaly = anomaly_model.score(t) if anomaly_model is not None else None
-        risk = score_tunnel(findings, anomaly["score"] if anomaly else None, engine.policy)
-        results.append(TunnelResult(t, findings, risk, anomaly))
-    results.sort(key=lambda r: r.risk.score, reverse=True)
-    return AnalysisResult(results, rec, cap, engine.policy.name, time.perf_counter() - t0)
+    res = AnalysisResult([TunnelResult(t, engine.evaluate(t), None) for t in rec.tunnels], rec, cap, engine.policy.name, 0.0)
+    score_analyses([res], anomaly_model, engine)
+    res.seconds = time.perf_counter() - t0
+    return res
+
+
+def score_analyses(analyses: list[AnalysisResult], anomaly_model: Any | None, engine: RuleEngine) -> None:
+    """Fill in anomaly and risk for every tunnel, then order each analysis by risk.
+
+    All tunnels go to the model in one batch (also across captures): the forests' per-call overhead dwarfs the per-row
+    cost, and rows are scored independently, so batching does not change any number.
+    """
+    results = [r for a in analyses for r in a.tunnels]
+    anomalies = anomaly_model.score_many([r.tunnel for r in results]) if anomaly_model is not None else [None] * len(results)
+    for r, anomaly in zip(results, anomalies):
+        r.anomaly = anomaly
+        r.risk = score_tunnel(r.findings, anomaly["score"] if anomaly else None, engine.policy)
+    for a in analyses:
+        a.tunnels.sort(key=lambda r: r.risk.score, reverse=True)

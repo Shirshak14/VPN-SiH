@@ -7,16 +7,18 @@ endpoints via `prior_attempts` (this is what the downgrade rule reads).
 """
 from __future__ import annotations
 
+import bisect
 import itertools
 from collections import defaultdict
 from dataclasses import dataclass, field
 
 from ..parser import constants as C
-from ..parser.models import CaptureStats, EspPacket, IkeMessage, ParsedCapture, Proposal
+from ..parser.models import CaptureStats, EspFlowStats, IkeMessage, ParsedCapture, Proposal
 from .models import AttemptSummary, ChildSa, EspFlow, Suite, TimelineEvent, Tunnel
 
 _MAX_COMBOS = 64
 _PRIOR_WINDOW_S = 300.0
+_HALF_OPEN_WINDOW_S = 300.0
 
 
 @dataclass
@@ -82,8 +84,8 @@ def _payload_label(m: IkeMessage) -> str:
     ps = m.payloads
     types = [t for t in ps.types if t not in (46, 53)] if m.version == 2 else ps.types
     lab = ", ".join(names.get(t, str(t)) for t in types)
-    if m.encrypted_v1:
-        return "encrypted (IKEv1 phase-1 keys unavailable)"
+    if m.encrypted_v1 and m.decrypted is None:
+        return "encrypted (IKEv1 decryption failed)" if m.decrypt_error else "encrypted (IKEv1 phase-1 keys unavailable)"
     if m.enc_body is not None and m.decrypted is None:
         return (lab + " + " if lab else "") + "SK[encrypted]"
     return lab
@@ -105,16 +107,37 @@ def reconstruct(cap: ParsedCapture) -> Reconstruction:
     tunnels = [t for t in (_build_tunnel(msgs, cap) for msgs in groups.values()) if t is not None]
     tunnels.sort(key=lambda t: t.first_ts)
 
+    by_peers: dict[tuple[str, str], list[Tunnel]] = defaultdict(list)
+    for t in tunnels:
+        by_peers[(t.initiator, t.responder)].append(t)
     for t in tunnels:
         t.prior_attempts = [
             AttemptSummary(p.ispi, p.first_ts, p.status, p.failure, p.offered, p.chosen)
-            for p in tunnels
-            if p is not t and p.initiator == t.initiator and p.responder == t.responder
-            and 0 < t.first_ts - p.first_ts <= _PRIOR_WINDOW_S
+            for p in by_peers[(t.initiator, t.responder)]
+            if p is not t and 0 < t.first_ts - p.first_ts <= _PRIOR_WINDOW_S
         ]
 
-    orphans = _attach_esp(tunnels, cap.esp)
+    _count_half_open(tunnels)
+    orphans = _attach_esp(tunnels, cap.esp_flows)
     return Reconstruction(tunnels, orphans, cap.stats)
+
+
+def _count_half_open(tunnels: list[Tunnel]) -> None:
+    """Flag floods/scans: handshakes the responder never answered, grouped by initiator and by responder.
+
+    A tunnel is half-open when every captured message goes initiator -> responder. `half_open_peers` is the
+    larger of (a) half-open handshakes from the same initiator and (b) half-open handshakes aimed at the same
+    responder within +-5 minutes, so both a sweep from one source and a flood from many sources are visible.
+    Only half-open tunnels carry the count (completed tunnels stay 0).
+    """
+    half = [t for t in tunnels if t.timeline and all(e.direction == "I->R" for e in t.timeline)]
+    starts = [t.first_ts for t in half]  # sorted: `tunnels` is ordered by first_ts
+    for t in half:
+        # bisect with 1 s of slack narrows the candidates; the exact window test below decides
+        lo = bisect.bisect_left(starts, t.first_ts - _HALF_OPEN_WINDOW_S - 1)
+        hi = bisect.bisect_right(starts, t.first_ts + _HALF_OPEN_WINDOW_S + 1)
+        near = [p for p in half[lo:hi] if abs(p.first_ts - t.first_ts) <= _HALF_OPEN_WINDOW_S]
+        t.half_open_peers = max(sum(p.initiator == t.initiator for p in near), sum(p.responder == t.responder for p in near))
 
 
 def _build_tunnel(msgs: list[IkeMessage], cap: ParsedCapture) -> Tunnel | None:
@@ -161,6 +184,7 @@ def _build_tunnel(msgs: list[IkeMessage], cap: ParsedCapture) -> Tunnel | None:
         else:
             streak = 0
         notes = [n for _c, n in _notify_names(m)]
+        label = _payload_label(m)
         if m.frag_num is not None:
             t.fragments += 1
             notes.append(f"fragment {m.frag_num}/{m.frag_total}")
@@ -170,8 +194,8 @@ def _build_tunnel(msgs: list[IkeMessage], cap: ParsedCapture) -> Tunnel | None:
             ts=m.ts, frame=m.frame, direction="I->R" if from_initiator(m) else "R->I",
             label=f"{_exch_name(m)} {'response' if m.is_response else 'request'}"
             if v == 2 else f"{_exch_name(m)}",
-            size=m.length, encrypted=(m.enc_body is not None and m.decrypted is None) or m.encrypted_v1,
-            retransmit=retrans, notes=([_payload_label(m)] if _payload_label(m) else []) + notes,
+            size=m.length, encrypted=(m.enc_body is not None or m.encrypted_v1) and m.decrypted is None,
+            retransmit=retrans, notes=([label] if label else []) + notes,
         ))
         if v == 1 and C.V1_FRAG in m.clear.types:
             t.fragments += 1
@@ -241,9 +265,50 @@ def _fill_negotiation(t: Tunnel, msgs: list[IkeMessage], from_initiator) -> None
             t.auth_method, t.auth_observable = t.offered[0].auth, True
         t.dpd_messages = sum(1 for m in msgs if m.exch == C.V1_INFO)
         t.create_child_exchanges = len({m.msg_id for m in msgs if m.exch == C.V1_QUICK})
-        if any(m.exch == C.V1_QUICK for m in msgs):
+        _collect_quick_mode(t, msgs, from_initiator)
+        if t.create_child_exchanges and not t.child_observable:
+            failed = next((m.decrypt_error for m in msgs if m.exch == C.V1_QUICK and m.decrypt_error), None)
             t.notes.append("IKEv1 Quick Mode is fully encrypted: ESP transforms and PFS are not observable "
-                           "without phase-1 keys.")
+                           "without phase-1 keys." + (f" Decryption was attempted but failed: {failed}." if failed else ""))
+
+
+def _quick_suite(p) -> Suite:
+    """Suite of an IKEv1 Quick Mode ESP/AH proposal (IPsec DOI attribute registry, RFC 2407 §4.5)."""
+    tr = p.transforms[0]
+    a = tr.attrs
+    names = C.V1_ESP_TRANSFORM if p.protocol == C.PROTO_ESP else {}
+    return Suite(
+        encr=names.get(tr.id, f"ESP_{tr.id}") if p.protocol == C.PROTO_ESP else None,
+        encr_bits=a.get(C.A2_KEYLEN),
+        integ=C.V1_IPSEC_AUTH.get(a.get(C.A2_AUTH), f"AUTH_{a.get(C.A2_AUTH)}") if C.A2_AUTH in a else None,
+        dh=C.DH_GROUP.get(a.get(C.A2_GROUP), f"GROUP_{a.get(C.A2_GROUP)}") if C.A2_GROUP in a else None,
+        lifetime_s=a.get(C.A2_LIFE_DUR) if a.get(C.A2_LIFE_TYPE, 1) == 1 else None,
+    )
+
+
+def _collect_quick_mode(t: Tunnel, msgs: list[IkeMessage], from_initiator) -> None:
+    """Child SAs from decrypted Quick Mode exchanges: the initiator's offer carries its SPI and the KE (PFS) payload,
+    the responder's answer carries the chosen proposal and its SPI. Retransmissions are ignored."""
+    by_id: dict[int, list[IkeMessage]] = defaultdict(list)
+    for m in msgs:
+        if m.exch == C.V1_QUICK and m.decrypted is not None and m.decrypted.v1_proposals:
+            by_id[m.msg_id].append(m)
+    for _mid, group in sorted(by_id.items(), key=lambda kv: kv[1][0].ts):
+        offer = next((m for m in group if from_initiator(m)), None)
+        answer = next((m for m in group if not from_initiator(m)), None)
+        if offer is None or answer is None:
+            continue
+        p = next((q for q in answer.decrypted.v1_proposals if q.protocol in (C.PROTO_ESP, C.PROTO_AH) and q.transforms), None)
+        if p is None:
+            continue
+        op = next((q for q in offer.decrypted.v1_proposals if q.protocol == p.protocol and q.spi), None)
+        suite = _quick_suite(p)
+        t.child_sas.append(ChildSa(
+            protocol=C.PROTO_NAME.get(p.protocol, "ESP"), via="Quick Mode", ts=answer.ts, suite=suite,
+            spi_initiator=op.spi.hex() if op else None, spi_responder=p.spi.hex() or None,
+            pfs=offer.decrypted.ke_len > 0, dh_offered=suite.dh is not None,
+        ))
+    t.child_observable = bool(t.child_sas)
 
 
 def _collect_child_v2(t: Tunnel, msgs: list[IkeMessage], m: IkeMessage, ps) -> None:
@@ -307,41 +372,31 @@ def _fill_status(t: Tunnel, msgs: list[IkeMessage]) -> None:
 
 
 # ----------------------------------------------------------------------------- ESP
-def _flows(esp: list[EspPacket]) -> list[tuple[EspFlow, list[EspPacket]]]:
-    by: dict[tuple, list[EspPacket]] = defaultdict(list)
-    for p in esp:
-        by[(p.spi, p.src, p.dst, p.proto)].append(p)
-    out = []
-    for (spi, src, dst, proto), pk in by.items():
-        pk.sort(key=lambda p: p.frame)
-        mx, gaps, replays = pk[0].seq, 0, 0
-        for p in pk[1:]:
-            if p.seq > mx:
-                gaps += min(p.seq - mx - 1, 65535)
-                mx = p.seq
-            else:
-                replays += 1
-        iats = [b.ts - a.ts for a, b in zip(pk, pk[1:])]
-        out.append((EspFlow(
-            spi=f"{spi:08x}", src=src, dst=dst, protocol="ESP" if proto == 50 else "AH",
-            packets=len(pk), bytes=sum(p.length for p in pk), first_ts=pk[0].ts, last_ts=pk[-1].ts,
-            seq_first=pk[0].seq, seq_last=pk[-1].seq, seq_gaps=gaps, seq_replays=replays,
-            udp_encap=any(p.udp_encap for p in pk),
-            mean_iat_ms=(sum(iats) / len(iats) * 1000) if iats else 0.0,
-            mean_len=sum(p.length for p in pk) / len(pk),
-        ), pk))
-    return out
+def _flow(f: EspFlowStats) -> EspFlow:
+    n = f.packets
+    return EspFlow(
+        spi=f"{f.spi:08x}", src=f.src, dst=f.dst, protocol="ESP" if f.proto == 50 else "AH",
+        packets=n, bytes=f.bytes, first_ts=f.first_ts, last_ts=f.last_ts,
+        seq_first=f.seq_first, seq_last=f.seq_last, seq_gaps=f.seq_gaps, seq_replays=f.seq_replays,
+        udp_encap=f.udp_encap, mean_iat_ms=(f.iat_sum / (n - 1) * 1000) if n > 1 else 0.0, mean_len=f.bytes / n,
+    )
 
 
-def _attach_esp(tunnels: list[Tunnel], esp: list[EspPacket]) -> list[EspFlow]:
+def _attach_esp(tunnels: list[Tunnel], esp: list[EspFlowStats]) -> list[EspFlow]:
     orphans: list[EspFlow] = []
-    for flow, _pk in _flows(esp):
-        target = next(
-            (t for t in tunnels for c in t.child_sas if flow.spi in (c.spi_initiator, c.spi_responder)), None
-        )
+    by_spi: dict[str, Tunnel] = {}  # first tunnel (in capture order) whose child SA carries the SPI
+    by_peers: dict[frozenset[str], list[Tunnel]] = defaultdict(list)
+    for t in tunnels:
+        for c in t.child_sas:
+            for spi in (c.spi_initiator, c.spi_responder):
+                if spi is not None:
+                    by_spi.setdefault(spi, t)
+        by_peers[frozenset((t.initiator, t.responder))].append(t)
+    for flow in map(_flow, esp):
+        target = by_spi.get(flow.spi)
         if target is None:
-            cands = [t for t in tunnels if {t.initiator, t.responder} == {flow.src, flow.dst}
-                     and t.first_ts <= flow.first_ts + 0.001]
+            cands = [t for t in by_peers.get(frozenset((flow.src, flow.dst)), ())
+                     if t.first_ts <= flow.first_ts + 0.001]
             if cands:
                 target = max(cands, key=lambda t: t.first_ts)
         if target is None:

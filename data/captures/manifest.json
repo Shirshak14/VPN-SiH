@@ -186,6 +186,7 @@
   "tunnels": [
    {
     "assessable_rules": [
+     "IKE-HALF-OPEN-FLOOD",
      "SA-RETRANSMIT-EXCESS"
     ],
     "auth": "PSK",
@@ -209,6 +210,7 @@
     ],
     "esp_datagrams": 0,
     "expect_rules": [
+     "IKE-HALF-OPEN-FLOOD",
      "SA-RETRANSMIT-EXCESS"
     ],
     "family": "a_half_open_scan",
@@ -230,7 +232,9 @@
   "split": "test",
   "tunnels": [
    {
-    "assessable_rules": [],
+    "assessable_rules": [
+     "IKE-HALF-OPEN-FLOOD"
+    ],
     "auth": "RSA",
     "aux_ispis": [
      "5eaa8c670235ac1d",
@@ -258,7 +262,9 @@
      "4bfc59b58262242f"
     ],
     "esp_datagrams": 0,
-    "expect_rules": [],
+    "expect_rules": [
+     "IKE-HALF-OPEN-FLOOD"
+    ],
     "family": "a_half_open_scan",
     "ike_datagrams": 72,
     "ike_version": 2,
@@ -278,7 +284,9 @@
   "split": "test",
   "tunnels": [
    {
-    "assessable_rules": [],
+    "assessable_rules": [
+     "IKE-HALF-OPEN-FLOOD"
+    ],
     "auth": "RSA",
     "aux_ispis": [
      "d42180c16d1735f8",
@@ -297,7 +305,9 @@
      "84e33c1def23536b"
     ],
     "esp_datagrams": 0,
-    "expect_rules": [],
+    "expect_rules": [
+     "IKE-HALF-OPEN-FLOOD"
+    ],
     "family": "a_half_open_scan",
     "ike_datagrams": 45,
     "ike_version": 2,
@@ -318,6 +328,7 @@
   "tunnels": [
    {
     "assessable_rules": [
+     "IKE-HALF-OPEN-FLOOD",
      "SA-RETRANSMIT-EXCESS"
     ],
     "auth": "RSA",
@@ -340,6 +351,7 @@
     ],
     "esp_datagrams": 0,
     "expect_rules": [
+     "IKE-HALF-OPEN-FLOOD",
      "SA-RETRANSMIT-EXCESS"
     ],
     "family": "a_half_open_scan",
@@ -361,7 +373,9 @@
   "split": "test",
   "tunnels": [
    {
-    "assessable_rules": [],
+    "assessable_rules": [
+     "IKE-HALF-OPEN-FLOOD"
+    ],
     "auth": "RSA",
     "aux_ispis": [
      "a098b04424e1734d",
@@ -388,7 +402,9 @@
      "f1a8fe7d0bb7dec6"
     ],
     "esp_datagrams": 0,
-    "expect_rules": [],
+    "expect_rules": [
+     "IKE-HALF-OPEN-FLOOD"
+    ],
     "family": "a_half_open_scan",
     "ike_datagrams": 69,
     "ike_version": 2,
@@ -409,6 +425,7 @@
   "tunnels": [
    {
     "assessable_rules": [
+     "IKE-HALF-OPEN-FLOOD",
      "SA-RETRANSMIT-EXCESS"
     ],
     "auth": "RSA",
@@ -430,6 +447,7 @@
     ],
     "esp_datagrams": 0,
     "expect_rules": [
+     "IKE-HALF-OPEN-FLOOD",
      "SA-RETRANSMIT-EXCESS"
     ],
     "family": "a_half_open_scan",

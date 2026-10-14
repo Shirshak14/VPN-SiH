@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 
-export const PROV_LABEL: Record<string, string> = {
+const PROV_LABEL: Record<string, string> = {
   synthetic: "synthetic (simulated)",
   "real-lab": "real · strongSwan lab",
   "real-public": "real · public sample",
