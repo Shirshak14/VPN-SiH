@@ -111,7 +111,7 @@ def run(sc: Scenario, tmp: Path) -> dict:
         start_charon(ini, swanctl_conf(sc, "init", sc.init_ike, sc.init_esp), tmp)
 
         sh("docker", "exec", "-d", ini, "sh", "-c",
-           f"tcpdump -i eth0 -U -w /cap.pcap 'esp or ah or udp port 500 or udp port 4500' 2>/dev/null")
+           "tcpdump -i eth0 -U -w /cap.pcap 'esp or ah or udp port 500 or udp port 4500' 2>/dev/null")
         time.sleep(1.0)
 
         ok = sh("docker", "exec", ini, "swanctl", "--initiate", "--child", "net", check=False, timeout=60).returncode == 0

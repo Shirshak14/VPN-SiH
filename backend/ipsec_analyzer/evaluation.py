@@ -21,7 +21,7 @@ from .ml.model import DEFAULT_MODEL, AnomalyModel
 from .parser import parse_pcap
 from .parser.constants import V2_ENCR_TO_V1, V2_INTEG_TO_V1
 from .parser.decrypt import load_key_table
-from .pipeline import analyze
+from .pipeline import AnalysisResult, analyze, score_analyses
 from .rules import RuleEngine
 from .rules.policy import V1_UNOBSERVABLE_RULES
 
@@ -72,6 +72,8 @@ def evaluate_synthetic(manifest_path: Path, model: AnomalyModel | None, use_keys
         parse_checks[name][1] += 1
         parse_checks[name][0] += int(ok)
 
+    analysed: list[tuple[str, dict[str, Any], AnalysisResult]] = []
+    fresh: list[AnalysisResult] = []  # analysed with rules only; the anomaly model scores them below in one batch
     for name, m in manifest.items():
         if m["split"] in ("train", "demo"):
             continue  # held-out test split only
@@ -79,9 +81,14 @@ def evaluate_synthetic(manifest_path: Path, model: AnomalyModel | None, use_keys
         if keys is None and keyless_cache is not None and m["file"] in keyless_cache:
             res = keyless_cache[m["file"]]
         else:
-            res = analyze(root / m["file"], keys, engine, model)
+            res = analyze(root / m["file"], keys, engine)
+            fresh.append(res)
             if keys is None and keyless_cache is not None:
                 keyless_cache[m["file"]] = res
+        analysed.append((name, m, res))
+    score_analyses(fresh, model, engine)
+
+    for name, m, res in analysed:
         by = {r.tunnel.ispi: r for r in res.tunnels}
         chk("ike_datagrams_parsed", res.capture.stats.ike_messages == sum(t["ike_datagrams"] for t in m["tunnels"]))
         chk("esp_packets_parsed", res.capture.stats.esp_packets == sum(t["esp_datagrams"] for t in m["tunnels"]))
@@ -151,8 +158,10 @@ def evaluate_lab(lab_dir: Path, model: AnomalyModel | None) -> dict[str, Any] | 
     counts = {k: [0, 0, 0, 0] for k in ("combined", "rules", "ml")}
     tp = fp = fn = 0
     rows: list[dict[str, Any]] = []
-    for name, m in sorted(man.items()):
-        res = analyze(lab_dir / m["file"], lab_dir / m["keys"] if m.get("keys") else None, engine, model)
+    analysed = [(name, m, analyze(lab_dir / m["file"], lab_dir / m["keys"] if m.get("keys") else None, engine))
+                for name, m in sorted(man.items())]
+    score_analyses([res for _n, _m, res in analysed], model, engine)
+    for name, m, res in analysed:
         est = [r for r in res.tunnels if r.tunnel.chosen is not None and r.tunnel.status == "established"]
         if not est:
             rows.append({"capture": name, "error": "no established tunnel"})

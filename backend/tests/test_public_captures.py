@@ -1,8 +1,6 @@
 """Parser + rule engine validated on REAL third-party captures (Wireshark test suite)."""
 from pathlib import Path
 
-import pytest
-
 from ipsec_analyzer.evaluation import validate_public
 from ipsec_analyzer.pipeline import analyze
 from ipsec_analyzer.rules import RuleEngine

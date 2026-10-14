@@ -7,6 +7,7 @@ endpoints via `prior_attempts` (this is what the downgrade rule reads).
 """
 from __future__ import annotations
 
+import bisect
 import itertools
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -106,12 +107,14 @@ def reconstruct(cap: ParsedCapture) -> Reconstruction:
     tunnels = [t for t in (_build_tunnel(msgs, cap) for msgs in groups.values()) if t is not None]
     tunnels.sort(key=lambda t: t.first_ts)
 
+    by_peers: dict[tuple[str, str], list[Tunnel]] = defaultdict(list)
+    for t in tunnels:
+        by_peers[(t.initiator, t.responder)].append(t)
     for t in tunnels:
         t.prior_attempts = [
             AttemptSummary(p.ispi, p.first_ts, p.status, p.failure, p.offered, p.chosen)
-            for p in tunnels
-            if p is not t and p.initiator == t.initiator and p.responder == t.responder
-            and 0 < t.first_ts - p.first_ts <= _PRIOR_WINDOW_S
+            for p in by_peers[(t.initiator, t.responder)]
+            if p is not t and 0 < t.first_ts - p.first_ts <= _PRIOR_WINDOW_S
         ]
 
     _count_half_open(tunnels)
@@ -128,8 +131,12 @@ def _count_half_open(tunnels: list[Tunnel]) -> None:
     Only half-open tunnels carry the count (completed tunnels stay 0).
     """
     half = [t for t in tunnels if t.timeline and all(e.direction == "I->R" for e in t.timeline)]
+    starts = [t.first_ts for t in half]  # sorted: `tunnels` is ordered by first_ts
     for t in half:
-        near = [p for p in half if abs(p.first_ts - t.first_ts) <= _HALF_OPEN_WINDOW_S]
+        # bisect with 1 s of slack narrows the candidates; the exact window test below decides
+        lo = bisect.bisect_left(starts, t.first_ts - _HALF_OPEN_WINDOW_S - 1)
+        hi = bisect.bisect_right(starts, t.first_ts + _HALF_OPEN_WINDOW_S + 1)
+        near = [p for p in half[lo:hi] if abs(p.first_ts - t.first_ts) <= _HALF_OPEN_WINDOW_S]
         t.half_open_peers = max(sum(p.initiator == t.initiator for p in near), sum(p.responder == t.responder for p in near))
 
 
@@ -177,6 +184,7 @@ def _build_tunnel(msgs: list[IkeMessage], cap: ParsedCapture) -> Tunnel | None:
         else:
             streak = 0
         notes = [n for _c, n in _notify_names(m)]
+        label = _payload_label(m)
         if m.frag_num is not None:
             t.fragments += 1
             notes.append(f"fragment {m.frag_num}/{m.frag_total}")
@@ -187,7 +195,7 @@ def _build_tunnel(msgs: list[IkeMessage], cap: ParsedCapture) -> Tunnel | None:
             label=f"{_exch_name(m)} {'response' if m.is_response else 'request'}"
             if v == 2 else f"{_exch_name(m)}",
             size=m.length, encrypted=(m.enc_body is not None or m.encrypted_v1) and m.decrypted is None,
-            retransmit=retrans, notes=([_payload_label(m)] if _payload_label(m) else []) + notes,
+            retransmit=retrans, notes=([label] if label else []) + notes,
         ))
         if v == 1 and C.V1_FRAG in m.clear.types:
             t.fragments += 1
@@ -376,13 +384,19 @@ def _flow(f: EspFlowStats) -> EspFlow:
 
 def _attach_esp(tunnels: list[Tunnel], esp: list[EspFlowStats]) -> list[EspFlow]:
     orphans: list[EspFlow] = []
+    by_spi: dict[str, Tunnel] = {}  # first tunnel (in capture order) whose child SA carries the SPI
+    by_peers: dict[frozenset[str], list[Tunnel]] = defaultdict(list)
+    for t in tunnels:
+        for c in t.child_sas:
+            for spi in (c.spi_initiator, c.spi_responder):
+                if spi is not None:
+                    by_spi.setdefault(spi, t)
+        by_peers[frozenset((t.initiator, t.responder))].append(t)
     for flow in map(_flow, esp):
-        target = next(
-            (t for t in tunnels for c in t.child_sas if flow.spi in (c.spi_initiator, c.spi_responder)), None
-        )
+        target = by_spi.get(flow.spi)
         if target is None:
-            cands = [t for t in tunnels if {t.initiator, t.responder} == {flow.src, flow.dst}
-                     and t.first_ts <= flow.first_ts + 0.001]
+            cands = [t for t in by_peers.get(frozenset((flow.src, flow.dst)), ())
+                     if t.first_ts <= flow.first_ts + 0.001]
             if cands:
                 target = max(cands, key=lambda t: t.first_ts)
         if target is None:

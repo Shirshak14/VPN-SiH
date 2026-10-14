@@ -48,7 +48,6 @@ V2_TSI, V2_TSR, V2_SK, V2_SKF = 44, 45, 46, 53
 
 # --- IKEv2 transform types & IDs (RFC 7296 3.3.2, IANA) ---------------------
 T_ENCR, T_PRF, T_INTEG, T_DH, T_ESN = 1, 2, 3, 4, 5
-TRANSFORM_TYPE = {1: "ENCR", 2: "PRF", 3: "INTEG", 4: "DH", 5: "ESN"}
 
 ENCR = {
     1: "DES_IV64", 2: "DES", 3: "3DES", 4: "RC5", 5: "IDEA", 6: "CAST", 7: "BLOWFISH",
@@ -77,7 +76,6 @@ DH_GROUP = {
     28: "BRAINPOOL_P256", 29: "BRAINPOOL_P384", 30: "BRAINPOOL_P512", 31: "CURVE_25519",
     32: "CURVE_448",
 }
-ESN = {0: "NO_ESN", 1: "ESN"}
 
 PROTO_IKE, PROTO_AH, PROTO_ESP = 1, 2, 3
 PROTO_NAME = {1: "IKE", 2: "AH", 3: "ESP"}
@@ -103,9 +101,8 @@ NOTIFY_V2 = {
     16395: "NON_FIRST_FRAGMENTS_ALSO", 16396: "MOBIKE_SUPPORTED", 16407: "REDIRECT_SUPPORTED",
     16430: "IKEV2_FRAGMENTATION_SUPPORTED", 16431: "SIGNATURE_HASH_ALGORITHMS",
 }
-N_NO_PROPOSAL_CHOSEN, N_INVALID_KE = 14, 17
+N_INVALID_KE = 17
 N_NAT_SRC, N_NAT_DST, N_COOKIE, N_REKEY_SA, N_FRAG_SUPPORTED = 16388, 16389, 16390, 16393, 16430
-N_USE_TRANSPORT = 16391
 
 # IKEv1 ISAKMP notify types (RFC 2408 3.14.1 / RFC 2407 4.6.3)
 NOTIFY_V1 = {
@@ -122,28 +119,24 @@ NOTIFY_V1 = {
     24576: "RESPONDER-LIFETIME", 24577: "REPLAY-STATUS", 24578: "INITIAL-CONTACT",
     36136: "R-U-THERE", 36137: "R-U-THERE-ACK",
 }
-N1_NO_PROPOSAL_CHOSEN = 14
-N1_DPD, N1_DPD_ACK = 36136, 36137
 
 # --- IKEv1 Phase 1 (ISAKMP SA) transform attributes -------------------------
-A1_ENC, A1_HASH, A1_AUTH, A1_GROUP, A1_GROUP_TYPE = 1, 2, 3, 4, 5
-A1_LIFE_TYPE, A1_LIFE_DUR, A1_PRF, A1_KEYLEN = 11, 12, 13, 14
+A1_ENC, A1_HASH, A1_AUTH, A1_GROUP = 1, 2, 3, 4
+A1_LIFE_TYPE, A1_LIFE_DUR, A1_KEYLEN = 11, 12, 14
 V1_ENC = {1: "DES_CBC", 2: "IDEA_CBC", 3: "BLOWFISH_CBC", 4: "RC5_CBC", 5: "3DES_CBC",
           6: "CAST_CBC", 7: "AES_CBC", 8: "CAMELLIA_CBC"}
 V1_HASH_ALGORITHMS = {1: "MD5", 2: "SHA1", 3: "TIGER", 4: "SHA2_256", 5: "SHA2_384", 6: "SHA2_512"}
 V1_AUTH = {1: "PSK", 2: "DSS_SIG", 3: "RSA_SIG", 4: "RSA_ENC", 5: "RSA_ENC_REVISED",
            64221: "HYBRID_RSA", 65001: "XAUTH_PSK", 65003: "XAUTH_RSA", 65005: "XAUTH_INIT_RSA",
            65007: "XAUTH_RESP_RSA"}
-V1_AUTH_PSK_LIKE = {1, 65001}
 # IKEv1 "Group Description" attribute values share the IKEv2 DH registry (see DH_GROUP).
 
 # --- IKEv1 Phase 2 (IPsec DOI) attributes -----------------------------------
-A2_LIFE_TYPE, A2_LIFE_DUR, A2_GROUP, A2_ENCAP, A2_AUTH, A2_KEYLEN = 1, 2, 3, 4, 5, 6
+A2_LIFE_TYPE, A2_LIFE_DUR, A2_GROUP, A2_AUTH, A2_KEYLEN = 1, 2, 3, 5, 6
 V1_IPSEC_AUTH = {1: "HMAC_MD5", 2: "HMAC_SHA1", 3: "DES_MAC", 4: "KPDK", 5: "HMAC_SHA2_256",
                  6: "HMAC_SHA2_384", 7: "HMAC_SHA2_512"}
 V1_ESP_TRANSFORM = {1: "DES_IV64", 2: "DES", 3: "3DES", 4: "RC5", 5: "IDEA", 6: "CAST", 7: "BLOWFISH",
                     8: "3IDEA", 9: "DES_IV32", 10: "RC4", 11: "NULL", 12: "AES_CBC"}
-V1_ENCAP_MODE = {1: "Tunnel", 2: "Transport", 3: "UDP-Encap Tunnel", 4: "UDP-Encap Transport"}
 
 # --- Vendor IDs we recognise (IKEv1 capability signalling) ------------------
 VENDOR_IDS = {
@@ -155,8 +148,8 @@ VENDOR_IDS = {
 }
 
 # --- IKE header flags -------------------------------------------------------
-V2_FLAG_INITIATOR, V2_FLAG_VERSION, V2_FLAG_RESPONSE = 0x08, 0x10, 0x20
-V1_FLAG_ENCRYPT, V1_FLAG_COMMIT = 0x01, 0x02
+V2_FLAG_INITIATOR = 0x08
+V1_FLAG_ENCRYPT = 0x01
 
 IKE_PORT, NATT_PORT = 500, 4500
 
