@@ -215,7 +215,9 @@ def list_tunnels(aid: int, s: Session = Depends(db)) -> list[dict[str, Any]]:
         out.append({"id": t["id"], "initiator": t["initiator"], "responder": t["responder"], "ike_version": t["ike_version"],
                     "exchange_mode": t["exchange_mode"], "status": t["status"], "chosen": t["chosen"], "decrypted": t["decrypted"],
                     "risk": p["risk"], "anomaly_score": (p["anomaly"] or {}).get("score"),
-                    "violations": [{"rule_id": f["rule_id"], "severity": f["severity"]} for f in p["findings"] if f["category"] == "violation"]})
+                    "violations": [{"rule_id": f["rule_id"], "severity": f["severity"], "mitre": [m["id"] for m in f["mitre"]]}
+                                   for f in p["findings"] if f["category"] == "violation"],
+                    "mitre": list({m["id"]: m for f in p["findings"] if f["category"] == "violation" for m in f["mitre"]}.values())})
     return out
 
 

@@ -311,3 +311,33 @@ tbody tr.click:focus-visible { outline: 3px solid var(--focus); outline-offset: 
 .pol-tier:last-child { border-bottom: 0; }
 .pol-tier .badge { justify-self: start; }
 @media (max-width: 900px) { .pol-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---- results overview: risk strip + ATT&CK techniques ---- */
+.ov-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--gap-block); align-items: start; }
+.ov-grid h3 { margin-top: 0; }
+.ov-strip { padding: 0 var(--sp-2); }
+.ov-plot { position: relative; }
+.ov-zone { position: absolute; top: 0; bottom: 0; }
+.ov-zone.info { background: color-mix(in srgb, var(--info-bg) 60%, transparent); }
+.ov-zone.low { background: color-mix(in srgb, var(--low-bg) 60%, transparent); }
+.ov-zone.medium { background: color-mix(in srgb, var(--medium-bg) 60%, transparent); }
+.ov-zone.high { background: color-mix(in srgb, var(--high-bg) 60%, transparent); }
+.ov-zone.critical { background: color-mix(in srgb, var(--critical-bg) 60%, transparent); }
+.ov-zone + .ov-zone { border-left: 1px solid var(--line); }
+.ov-dot { position: absolute; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface); }
+.ov-dot::after { content: ""; position: absolute; inset: -5px; } /* bigger hit target */
+.ov-dot.info { background: var(--info); } .ov-dot.low { background: var(--low); } .ov-dot.medium { background: var(--medium); }
+.ov-dot.high { background: var(--high); } .ov-dot.critical { background: var(--critical); }
+.ov-dot:hover, .ov-dot:focus-visible { transform: scale(1.35); outline: none; z-index: 2; }
+.ov-tip { position: absolute; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 8px; padding: var(--sp-2) var(--sp-3); font-size: var(--fs-ui); white-space: nowrap; pointer-events: none; z-index: 3; }
+.ov-axis, .ov-ticks { position: relative; height: var(--sp-5); }
+.ov-axis { border-top: 1px solid var(--muted); }
+.ov-axis span { position: absolute; top: 2px; text-align: center; font-size: var(--fs-meta); text-transform: uppercase; letter-spacing: var(--ls-label); color: var(--muted); font-weight: var(--fw-semibold); overflow: hidden; white-space: nowrap; }
+.ov-ticks span { position: absolute; transform: translateX(-50%); font-variant-numeric: tabular-nums; }
+.ov-attack { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.ov-attack li { display: grid; grid-template-columns: 76px minmax(0, 1fr) 80px auto auto; gap: var(--sp-2) var(--sp-3); align-items: center; }
+.ov-attack li > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.ov-bar { height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.ov-bar i { display: block; height: 100%; background: var(--brand); border-radius: 4px; }
+@media (max-width: 900px) { .ov-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { .ov-attack li { grid-template-columns: 70px minmax(0, 1fr) auto; } .ov-attack .ov-bar, .ov-attack li > .badge { display: none; } }
