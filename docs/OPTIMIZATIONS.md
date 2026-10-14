@@ -25,6 +25,9 @@ applied. Items marked *measured* were timed on the dev machine; items marked *re
 | Parse-only / end-to-end throughput | 86k to 154k / 64k to 100k packets/s | *measured*, varies run to run (see #4) |
 | Docker: nginx during API startup | **502** seen at t+8 s after `docker compose up`; first healthy response about 70 s after `up` on this machine (the API app itself reports startup in about 12 s) | *measured*; confirms #8 |
 | Docker: cold image build | about 7 min (corpus regeneration and model training run at build time) | *measured* |
+| Analysis of `demo_gateway_audit` through the API, after #15 | **1.35 s → 0.13 s** (median of 6, warm server) | *measured* |
+| 3,461-tunnel stress capture (544k packets), full analysis, after #15 and #16 | **316 s → 11 s** (reconstruction alone 8.5 s → 1.3 s) | *measured* |
+| `python -m ipsec_analyzer.evaluation`, after #12 and #15 | **47 s → 9 s**, same `EVAL.json` apart from the run-dependent fields | *measured* |
 
 ---
 
@@ -46,9 +49,9 @@ applied. Items marked *measured* were timed on the dev machine; items marked *re
 | 7 | **Warm up the anomaly model and SHAP at API startup** | Removes the ~3.5 s first-click penalty (5.5 s vs ~1.5 to 2 s, *measured*) | Low: slower API start; results unchanged | Compare the first analysis time before/after, and per-tunnel scores. |
 | 8 | **Compose: API healthcheck and `depends_on: condition: service_healthy` for `web`** | Avoids the 502 nginx returns while the API starts (*measured*: seen at t+8 s; `depends_on` currently only waits for the container to start) | Low (Docker only) | `docker compose up` from cold and load the page immediately. |
 | 9 | **nginx: gzip, long cache for hashed `/assets` and `/fonts`, no-cache for `index.html`** | Faster repeat loads, smaller transfer | Low (Docker only) | Check headers with `curl -I`; confirm a hard refresh still picks up a new build. |
-| 10 | **Delete unused code**: about 25 unused parser constants, `api.health`, unused `Scenario` fields, unused `AnalysisResult` fields | Smaller surface to maintain | Very low | Tests plus byte-identical corpus. |
-| 11 | **Cache the `/api/samples` manifests** (reload when the file's modification time changes) | Three JSON files no longer re-read on every request | Very low | None needed beyond the smoke test. |
-| 12 | **Reuse parses in `evaluation.validate_public`** (each IKEv1 capture is parsed twice) and **analyse keyless captures once** in the evaluation run | Faster evaluation | None to the demo (offline script) | Same `docs/EVAL.json` before/after. |
+| 10 | **Delete unused code** | Smaller surface to maintain | Very low | **Done:** unused parser constants, imports and CSS rules, and `pandas` from `requirements.txt` (only `shap` needs it, and pulls it in itself). Tunnel and stats fields stay: they reach the API payload and the JSON export. Tests pass and the corpus is byte-identical. |
+| 11 | **Cache the `/api/samples` manifests** (reload when the file's modification time changes) | Three JSON files no longer re-read on every request | Very low | **Not done:** measured at 1.5 ms per request, so a cache would add code for no visible gain. |
+| 12 | **Reuse parses in `evaluation.validate_public`** (each IKEv1 capture is parsed twice) and **analyse keyless captures once** in the evaluation run | Faster evaluation | None to the demo (offline script) | **Done**, and the evaluation now scores all captures' tunnels in one batch (see #15). Same `docs/EVAL.json`. |
 | 13 | **Move Postgres credentials to environment or secrets** in `docker-compose.yml` | Better hygiene | Low | `docker compose up` still works. |
 | 14 | **Upload housekeeping**: clear old files in `data/uploads/` | Stops disk growth over many uploads | Low | *Unverified:* whether files accumulate; check before changing. |
 
@@ -56,8 +59,8 @@ applied. Items marked *measured* were timed on the dev machine; items marked *re
 
 | # | Optimization | Benefit | Risk | How to de-risk |
 |---|---|---|---|---|
-| 15 | **Batch anomaly scoring across tunnels** (today 6 `IsolationForest` calls plus one SHAP call per tunnel) | Probably the largest remaining speed-up on analyze (*reasoned*) | Medium: touches scoring and SHAP; every on-screen score depends on it | Per-tunnel scores and `EVAL.json` must be identical. |
-| 16 | **Index the lookups in `sa/reconstruct.py`** (O(n²) `prior_attempts`, nested loops for ESP-to-tunnel matching, linear request lookup) | Matters for large captures (*reasoned*); demo captures are small, so little gain today | Medium: core reconstruction | Byte-identical evaluation and tests. |
+| 15 | **Batch anomaly scoring across tunnels** | Largest speed-up on analyze (*measured*, see above) | Medium: touches scoring and SHAP | **Done:** one `IsolationForest` call per group for all tunnels (each call cost ~35 ms of fixed overhead), and a SHAP explainer that cannot be built for a single-feature forest is no longer rebuilt for every tunnel. Per-tunnel payloads for `demo_gateway_audit` and the stress capture, the trained model file and `EVAL.json` are identical before and after. |
+| 16 | **Index the lookups in `sa/reconstruct.py`** | Matters for large captures | Medium: core reconstruction | **Done:** `prior_attempts` and ESP-to-tunnel matching use dictionaries, half-open counting narrows its window with `bisect`. Identical results as #15. |
 | 17 | **Tighten CORS** (`allow_origins=["*"]` today) | Hardening | Medium: could block a demo served from another origin | Make it an environment setting, defaulting to the current behaviour. |
 | 18 | **Name the magic numbers in `synth/simulate.py`** (about 60 raw values) | Readability only | Low-medium: a large generator diff | Byte-identical corpus. |
 | 19 | **Run the backend container as a non-root user**, and slim the image | Hygiene, smaller image | Medium (Docker only) | Full `docker compose build` and `up`. |
@@ -81,5 +84,5 @@ applied. Items marked *measured* were timed on the dev machine; items marked *re
 
 1. ~~Tier 0 (#1 to #6)~~ done, including the Docker verification.
 2. **Next (Tier 1):** #7 first, since it has the largest visible effect, then #8 and #9 if the demo runs through Docker.
-3. **Only with proof (Tier 2):** #15 if uploads still feel slow after #7.
+3. ~~**Only with proof (Tier 2):** #15~~ done with proof, together with #16.
 4. **After the demo:** all of Tier 3.

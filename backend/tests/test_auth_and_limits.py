@@ -1,6 +1,5 @@
 """Optional API-key auth (two roles, cookie login) and upload limits. Uses the bundled demo capture; SQLite, no mocks."""
 import importlib
-import os
 import secrets
 from pathlib import Path
 

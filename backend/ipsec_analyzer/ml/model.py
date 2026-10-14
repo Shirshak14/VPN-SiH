@@ -31,17 +31,19 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import joblib
 import numpy as np
-import shap
 from sklearn.ensemble import IsolationForest
 from sklearn.model_selection import KFold
 
 from ..rules.engine import RuleEngine
 from ..sa.models import Tunnel
 from . import features as F
+
+if TYPE_CHECKING:
+    import shap
 
 DEFAULT_MODEL = Path(__file__).resolve().parents[2] / "models" / "anomaly_if.joblib"
 SPAN_FLOOR = 0.03  # minimum calibration span so near-constant benign groups don't flag on noise
@@ -83,7 +85,7 @@ class AnomalyModel:
     def __init__(self, forests: dict[str, IsolationForest], meta: ModelMeta, engine: RuleEngine | None = None) -> None:
         self.forests, self.meta = forests, meta
         self.engine = engine or RuleEngine()
-        self._explainers: dict[str, shap.TreeExplainer] = {}
+        self._explainers: dict[str, shap.TreeExplainer | Exception] = {}
 
     # ------------------------------------------------------------------ training
     @classmethod
@@ -113,12 +115,10 @@ class AnomalyModel:
         return cls(forests, meta, engine)
 
     # ------------------------------------------------------------------ scoring
-    def _group_score(self, g: str, feats: dict[str, float]) -> tuple[float, float, np.ndarray]:
-        x = np.array([[feats[c] for c in GROUPS[g]]], dtype=float)
-        raw = float(-self.forests[g].score_samples(x)[0])
+    def _calibrate(self, g: str, raw: float) -> float:
         c = self.meta.calibration[g]
         span = max(c["p99"] - c["median"], SPAN_FLOOR)
-        return float(min(max(0.5 * (raw - c["median"]) / span, 0.0), 1.0)), raw, x
+        return float(min(max(0.5 * (raw - c["median"]) / span, 0.0), 1.0))
 
     def _envelope_scores(self, group: str, feats: dict[str, float]) -> dict[str, float]:
         """Per-feature envelope score and signed deviation (in benign spans) for one envelope group."""
@@ -131,22 +131,33 @@ class AnomalyModel:
         return out
 
     def score(self, t: Tunnel, top_k: int = 5) -> dict[str, Any]:
-        feats = F.extract(t, self.engine)
-        per = {g: self._group_score(g, feats) for g in GROUPS}
-        zs = {g: self._envelope_scores(g, feats) for g in ENVELOPES}
-        env_score = {g: float(min(max(0.5 * max(z.values()) / (1 + ENVELOPE_MARGIN), 0.0), 1.0)) if z else 0.0
-                     for g, z in zs.items()}
-        scores = {**{g: v[0] for g, v in per.items()}, **env_score}
-        top_g = max(scores, key=lambda g: scores[g])
-        score = scores[top_g]
-        return {
-            "score": round(score, 4), "is_anomalous": score > 0.5, "threshold": 0.5, "dominant_group": top_g,
-            "groups": [{"group": g, "score": round(v, 4), "features": ALL_GROUPS[g]} for g, v in
-                       sorted(scores.items(), key=lambda kv: -kv[1])],
-            "features": feats,
-            "explanation": (self._explain_envelope(top_g, zs[top_g], feats, top_k) if top_g in ENVELOPES
-                            else self._explain(top_g, per[top_g][2], top_k)),
-        }
+        return self.score_many([t], top_k)[0]
+
+    def score_many(self, tunnels: list[Tunnel], top_k: int = 5) -> list[dict[str, Any]]:
+        """Score tunnels with one forest call per group: sklearn's per-call overhead (~35 ms for 200 trees) dwarfs the
+        per-row cost, and each row's score is computed independently, so batching gives the same numbers."""
+        if not tunnels:
+            return []
+        feats = [F.extract(t, self.engine) for t in tunnels]
+        X = {g: np.array([[f[c] for c in cols] for f in feats], dtype=float) for g, cols in GROUPS.items()}
+        raw = {g: -self.forests[g].score_samples(x) for g, x in X.items()}
+        out = []
+        for i, f in enumerate(feats):
+            zs = {g: self._envelope_scores(g, f) for g in ENVELOPES}
+            env_score = {g: float(min(max(0.5 * max(z.values()) / (1 + ENVELOPE_MARGIN), 0.0), 1.0)) if z else 0.0
+                         for g, z in zs.items()}
+            scores = {**{g: self._calibrate(g, float(raw[g][i])) for g in GROUPS}, **env_score}
+            top_g = max(scores, key=lambda g: scores[g])
+            score = scores[top_g]
+            out.append({
+                "score": round(score, 4), "is_anomalous": score > 0.5, "threshold": 0.5, "dominant_group": top_g,
+                "groups": [{"group": g, "score": round(v, 4), "features": ALL_GROUPS[g]} for g, v in
+                           sorted(scores.items(), key=lambda kv: -kv[1])],
+                "features": f,
+                "explanation": (self._explain_envelope(top_g, zs[top_g], f, top_k) if top_g in ENVELOPES
+                                else self._explain(top_g, X[top_g][i:i + 1], top_k)),
+            })
+        return out
 
     def _explain_envelope(self, group: str, zs: dict[str, float], feats: dict[str, float], top_k: int) -> dict[str, Any]:
         """Deviation of each feature from the benign baseline, in units of the benign median-to-p99 span."""
@@ -161,14 +172,28 @@ class AnomalyModel:
             } for c, z in rows],
         }
 
+    @staticmethod
+    def _unexplained(group: str, e: Exception) -> dict[str, Any]:
+        return {"method": "SHAP TreeExplainer on the fitted IsolationForest", "group": group, "top_features": [],
+                "error": f"explanation unavailable: {type(e).__name__}"}
+
     def _explain(self, group: str, x: np.ndarray, top_k: int) -> dict[str, Any]:
-        try:
-            if group not in self._explainers:
+        # SHAP cannot explain degenerate (split-free) forests; say so instead of inventing values. A failed build is
+        # cached as well, since retrying it costs as much as a successful one.
+        if group not in self._explainers:
+            import shap  # deferred: importing it takes about a second and only explanations need it
+
+            try:
                 self._explainers[group] = shap.TreeExplainer(self.forests[group])
-            sv = np.asarray(self._explainers[group].shap_values(x))[0]
-        except Exception as e:  # SHAP cannot explain degenerate (split-free) forests; say so instead of inventing values
-            return {"method": "SHAP TreeExplainer on the fitted IsolationForest", "group": group, "top_features": [],
-                    "error": f"explanation unavailable: {type(e).__name__}"}
+            except Exception as e:  # noqa: BLE001
+                self._explainers[group] = e
+        ex = self._explainers[group]
+        if isinstance(ex, Exception):
+            return self._unexplained(group, ex)
+        try:
+            sv = np.asarray(ex.shap_values(x))[0]
+        except Exception as e:  # noqa: BLE001
+            return self._unexplained(group, e)
         contrib = -sv  # SHAP explains the forest's decision function (higher = more normal); flip: + = more anomalous
         cols = GROUPS[group]
         order = np.argsort(-np.abs(contrib))[:top_k]
