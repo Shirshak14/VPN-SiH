@@ -46,6 +46,8 @@ def test_pcap_upload_end_to_end(client):
     assert a["status"] == "done" and a["summary"]["tunnel_count"] >= 11
     tunnels = client.get(f"/api/analyses/{a['id']}/tunnels").json()
     assert tunnels == sorted(tunnels, key=lambda t: -t["risk"]["score"])
+    ids = {m["id"] for t in tunnels for m in t["mitre"]}
+    assert ids and ids == {m for t in tunnels for v in t["violations"] for m in v["mitre"]}
     detail = client.get(f"/api/analyses/{a['id']}/tunnels/{tunnels[0]['id']}").json()
     assert detail["findings"] and detail["tunnel"]["timeline"]
     assert client.get(f"/api/analyses/{a['id']}/report.pdf").content.startswith(b"%PDF")

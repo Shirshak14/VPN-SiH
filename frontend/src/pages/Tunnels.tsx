@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Analysis, Json, api } from "../api";
 import { ErrorBox, Loading, Meter, Prov, ProvBanner, Sev } from "../ui";
+import Overview from "./Overview";
 
 const BANDS = ["critical", "high", "medium", "low", "info"];
 const VISIBLE_FINDINGS = 2;
@@ -104,6 +105,8 @@ export default function Tunnels({ aid }: { aid: number }) {
           </p>
         </div>
       </section>
+
+      <Overview tunnels={tunnels} href={href} />
 
       <section className="res-section">
         <div className="sec-head"><h2>Tunnels — highest risk first</h2><span className="small muted">select a row for full details</span></div>
