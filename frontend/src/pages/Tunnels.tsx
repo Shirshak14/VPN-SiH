@@ -57,6 +57,7 @@ export default function Tunnels({ aid }: { aid: number }) {
           <a className="btn sm primary" href={api.url(aid, "report.pdf")}>Download PDF report</a>
           <a className="btn sm" href={api.url(aid, "export.json")}>JSON</a>
           <a className="btn sm" href={api.url(aid, "export.syslog")}>Syslog / CEF</a>
+          <a className="btn sm" href={`#/policy/${aid}`}>Policy rules checked</a>
           <a className="btn sm" href={`#/compare/${aid}/0`}>Compare with another capture</a>
         </div>
       </header>

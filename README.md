@@ -131,9 +131,9 @@ Behavioural families (all simulator-only, designed by us): oversize handshakes 6
 `POST /api/analyses` (multipart `pcap`, optional `keys`) · `POST /api/samples/{name}/analyze` · `GET /api/analyses/{id}` (status + stage) ·
 `…/tunnels` · `…/tunnels/{tid}` (SA detail, findings, risk, SHAP) · `…/remediation` · `…/report.pdf` · `…/export.json` · `…/export.syslog` ·
 `GET /api/compare?before={id}&after={id}` (risk change, rules fixed/new/remaining, tunnels matched by peer pair) ·
-`GET /api/metrics` · `GET /api/policy` · `GET /api/health`. Interactive docs at `/docs`.
+`GET /api/metrics` · `GET /api/policy` (rules with description, sources, ATT&CK and fix; algorithm tiers; risk formula) · `GET /api/health`. Interactive docs at `/docs`.
 
-The **Compare** page in the UI uses that endpoint: pick a capture from before a configuration change and one from after (for example the lab's `weak_des_md5_modp768` and `ok_aes256gcm_ecp384`) to show the risk drop and which violations went away.
+The **Compare** page in the UI uses that endpoint: pick a capture from before a configuration change and one from after (for example the lab's `weak_des_md5_modp768` and `ok_aes256gcm_ecp384`) to show the risk drop and which violations went away. The **Policy** page lists every rule the analyzer checks, its sources, ATT&CK techniques and fix, plus the algorithm tiers and risk formula; opened from a results page it highlights the rules that fired.
 
 ## Honest list of corners cut
 

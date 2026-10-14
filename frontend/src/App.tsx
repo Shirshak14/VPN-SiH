@@ -3,6 +3,7 @@ import { api, AUTH_EVENT, AuthState } from "./api";
 import Analyze from "./pages/Analyze";
 import Compare from "./pages/Compare";
 import Evaluation from "./pages/Evaluation";
+import Policy from "./pages/Policy";
 import TunnelDetail from "./pages/TunnelDetail";
 import Tunnels from "./pages/Tunnels";
 
@@ -68,6 +69,9 @@ export default function App() {
   } else if (p[0] === "compare") {
     page = <Compare before={Number(p[1]) || undefined} after={Number(p[2]) || undefined} />;
     active = "compare";
+  } else if (p[0] === "policy") {
+    page = <Policy key={p[1] ?? ""} aid={Number(p[1]) || undefined} />;
+    active = "policy";
   } else if (p[0] === "eval") {
     page = <Evaluation />;
     active = "eval";
@@ -85,6 +89,7 @@ export default function App() {
         <nav className="nav" aria-label="Main">
           <a href="#/" className={active === "analyze" ? "active" : ""} aria-current={active === "analyze" ? "page" : undefined}>Analyze</a>
           <a href="#/compare" className={active === "compare" ? "active" : ""} aria-current={active === "compare" ? "page" : undefined}>Compare</a>
+          <a href="#/policy" className={active === "policy" ? "active" : ""} aria-current={active === "policy" ? "page" : undefined}>Policy</a>
           <a href="#/eval" className={active === "eval" ? "active" : ""} aria-current={active === "eval" ? "page" : undefined}>Evaluation</a>
         </nav>
         <span className="muted small">

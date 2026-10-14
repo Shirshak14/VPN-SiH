@@ -296,3 +296,18 @@ tbody tr.click:focus-visible { outline: 3px solid var(--focus); outline-offset: 
   .cmp-pickers, .cmp-summary, .cmp-rulegrid { grid-template-columns: minmax(0, 1fr); }
   .cmp-mid { align-items: flex-start; text-align: left; }
 }
+
+/* ---- policy page ---- */
+.pol-rules td { vertical-align: top; }
+.pol-rules td:first-child { min-width: 260px; max-width: 420px; }
+.pol-rules td:first-child > div + div { margin-top: var(--sp-1); }
+.pol-rules tr.fired { background: var(--high-bg); }
+.pol-rules tr.fired td:first-child { box-shadow: inset 4px 0 0 var(--high); }
+.pol-tiers { display: grid; gap: var(--sp-1); white-space: nowrap; }
+.fired-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--high); vertical-align: middle; }
+.pol-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap-block); }
+.pol-grid h3 { margin-top: 0; }
+.pol-tier { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: var(--sp-2); align-items: start; padding: var(--sp-2) 0; border-bottom: 1px dashed var(--line); }
+.pol-tier:last-child { border-bottom: 0; }
+.pol-tier .badge { justify-self: start; }
+@media (max-width: 900px) { .pol-grid { grid-template-columns: minmax(0, 1fr); } }
