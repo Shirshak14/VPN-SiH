@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, AUTH_EVENT, AuthState } from "./api";
 import Analyze from "./pages/Analyze";
+import Compare from "./pages/Compare";
 import Evaluation from "./pages/Evaluation";
 import TunnelDetail from "./pages/TunnelDetail";
 import Tunnels from "./pages/Tunnels";
@@ -64,6 +65,9 @@ export default function App() {
   } else if (p[0] === "a" && p[1]) {
     page = <Tunnels key={p[1]} aid={Number(p[1])} />;
     active = "results";
+  } else if (p[0] === "compare") {
+    page = <Compare before={Number(p[1]) || undefined} after={Number(p[2]) || undefined} />;
+    active = "compare";
   } else if (p[0] === "eval") {
     page = <Evaluation />;
     active = "eval";
@@ -80,6 +84,7 @@ export default function App() {
         </a>
         <nav className="nav" aria-label="Main">
           <a href="#/" className={active === "analyze" ? "active" : ""} aria-current={active === "analyze" ? "page" : undefined}>Analyze</a>
+          <a href="#/compare" className={active === "compare" ? "active" : ""} aria-current={active === "compare" ? "page" : undefined}>Compare</a>
           <a href="#/eval" className={active === "eval" ? "active" : ""} aria-current={active === "eval" ? "page" : undefined}>Evaluation</a>
         </nav>
         <span className="muted small">

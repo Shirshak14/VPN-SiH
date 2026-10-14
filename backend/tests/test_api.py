@@ -55,3 +55,23 @@ def test_pcap_upload_end_to_end(client):
 
 def test_unknown_analysis_404(client):
     assert client.get("/api/analyses/99999").status_code == 404
+
+
+def _upload(client, stem):
+    d = ROOT / "data/captures/lab"
+    files = {"pcap": (f"{stem}.pcap", (d / f"{stem}.pcap").read_bytes())}
+    if (d / f"{stem}.keys").exists():
+        files["keys"] = ("k.txt", (d / f"{stem}.keys").read_bytes())
+    return _wait(client, client.post("/api/analyses", files=files).json()["id"])
+
+
+def test_compare_weak_vs_fixed(client):
+    weak, ok = _upload(client, "weak_des_md5_modp768"), _upload(client, "ok_aes256gcm_ecp384")
+    c = client.get(f"/api/compare?before={weak['id']}&after={ok['id']}").json()
+    assert c["before_analysis"]["id"] == weak["id"] and c["after_analysis"]["id"] == ok["id"]
+    assert c["after"]["max_score"] < c["before"]["max_score"]
+    assert c["rules"]["fixed"] and not c["rules"]["new"]
+    pair = next(r for r in c["tunnels"] if r["before"] and r["after"])  # same lab peers on both sides
+    assert pair["delta"] < 0 and set(pair["fixed"]) == set(pair["before"]["rules"]) - set(pair["after"]["rules"])
+    assert client.get(f"/api/compare?before={weak['id']}&after={weak['id']}").status_code == 400
+    assert client.get(f"/api/compare?before={weak['id']}&after=99999").status_code == 404

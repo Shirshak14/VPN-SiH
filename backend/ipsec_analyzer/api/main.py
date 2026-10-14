@@ -16,6 +16,7 @@ from ..reports.export import to_json, to_syslog
 from ..reports.pdf import build_pdf
 from ..rules.policy import SEV_ORDER
 from . import auth, service
+from .compare import compare
 from .db import DATA_DIR, Analysis, SessionLocal, TunnelRow, init_db
 
 # Uploads stream to disk in 1 MiB chunks and the parser keeps only per-flow ESP counters, so the cap is a disk/time
@@ -259,3 +260,12 @@ def export_syslog(aid: int, s: Session = Depends(db)) -> Response:
     a = _done(s, aid)
     return Response(to_syslog(_analysis_dict(a), _tunnels(s, aid)), media_type="text/plain",
                     headers={"Content-Disposition": f'attachment; filename="ipsec-analysis-{aid}.syslog"'})
+
+
+@app.get("/api/compare")
+def compare_analyses(before: int, after: int, s: Session = Depends(db)) -> dict[str, Any]:
+    """Before/after diff of two finished analyses: risk change, rules fixed/new/remaining, tunnels matched by peer pair."""
+    if before == after:
+        raise HTTPException(400, "pick two different analyses")
+    a, b = _done(s, before), _done(s, after)
+    return {"before_analysis": _analysis_dict(a), "after_analysis": _analysis_dict(b), **compare(_tunnels(s, before), _tunnels(s, after))}

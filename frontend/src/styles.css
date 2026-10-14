@@ -270,3 +270,29 @@ tbody tr.click:focus-visible { outline: 3px solid var(--focus); outline-offset: 
 .login { max-width: 26rem; margin: var(--sp-6, 3rem) auto; display: flex; flex-direction: column; gap: var(--sp-2); }
 .login input { padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: inherit; font: inherit; }
 .linklike { background: none; border: 0; color: var(--brand); cursor: pointer; font: inherit; margin-left: var(--sp-3); padding: 0; text-decoration: underline; }
+
+/* ---- compare page ---- */
+.cmp-pickers { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: var(--sp-4); align-items: end; }
+.cmp-pick { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.cmp-pick select { font: var(--fw-regular) var(--fs-ui)/var(--lh-ui) var(--font-sans); padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); width: 100%; }
+.cmp-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: var(--sp-6); align-items: center; }
+.cmp-side { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; overflow-wrap: anywhere; }
+.cmp-side .meter { max-width: 220px; }
+.cmp-mid { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); text-align: center; }
+.delta { font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.delta.down { color: var(--ok); }
+.delta.up { color: var(--critical); }
+.cmp-rulegrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap-block); }
+.cmp-rules { border: 1px solid var(--line); border-top-width: 4px; border-radius: var(--radius); padding: var(--sp-3) var(--sp-4); background: var(--surface); }
+.cmp-rules h3 { margin-top: 0; }
+.cmp-rules.fixed { border-top-color: var(--ok); }
+.cmp-rules.new { border-top-color: var(--critical); }
+.cmp-rules.remaining { border-top-color: var(--medium); }
+.cmp-rules ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.cmp-cell { color: var(--text); display: block; }
+.chip.fixed { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+.chip.new { background: var(--critical-bg); color: var(--critical); border-color: transparent; }
+@media (max-width: 800px) {
+  .cmp-pickers, .cmp-summary, .cmp-rulegrid { grid-template-columns: minmax(0, 1fr); }
+  .cmp-mid { align-items: flex-start; text-align: left; }
+}
