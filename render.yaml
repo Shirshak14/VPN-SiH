@@ -1,0 +1,17 @@
+# One-click public demo on Render: Dashboard -> New -> Blueprint -> pick this repository.
+# A single free web service built from the root Dockerfile (API + UI in one container, SQLite inside it).
+# Free instances sleep after ~15 idle minutes (the next visit takes about a minute to wake) and the filesystem is
+# ephemeral, so uploaded analyses disappear on restart; the bundled captures are always there.
+# The demo is open; to require a sign-in add API_KEY (and optionally READONLY_API_KEY) in the service's Environment tab.
+services:
+  - type: web
+    name: ipsec-vpn-analyzer
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      # Keep uploads small on the free plan's limited disk and memory.
+      - key: MAX_UPLOAD_MB
+        value: "50"
