@@ -17,7 +17,7 @@ from ..reports.html import build_html
 from ..reports.pdf import build_pdf
 from ..reports.summary import remediation_plan
 from ..scoring import FORMULA
-from . import auth, service
+from . import auth, gallery, service
 from .compare import compare
 from .db import DATA_DIR, Analysis, SessionLocal, TunnelRow, init_db
 
@@ -34,11 +34,16 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 auth.install(app)  # no-op until API_KEY is set
 
 
+def _warm() -> None:
+    service.warm_up()
+    gallery.warm_previews(_samples(), service.get_engine(), service.get_model())  # headline numbers for the gallery cards
+
+
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
     service.get_engine()  # fail fast on a malformed policy pack
-    threading.Thread(target=service.warm_up, name="warm-up", daemon=True).start()  # first analysis then runs warm
+    threading.Thread(target=_warm, name="warm-up", daemon=True).start()  # first analysis then runs warm
 
 
 def db() -> Session:
@@ -121,8 +126,10 @@ def _samples() -> dict[str, dict[str, Any]]:
 
 @app.get("/api/samples")
 def samples() -> list[dict[str, Any]]:
-    return [{k: v for k, v in s.items() if k not in ("pcap", "keys")} | {"has_keys": s["keys"] is not None}
-            for s in _samples().values()]
+    """Gallery entries, curated order first. `preview` is null until the background warm-up has analysed that capture."""
+    rows = [{k: v for k, v in s.items() if k not in ("pcap", "keys")} | {"has_keys": s["keys"] is not None}
+            | gallery.describe(s["name"], s["description"], s["provenance"]) for s in _samples().values()]
+    return sorted(rows, key=lambda r: r["order"])
 
 
 @app.get("/api/policy")

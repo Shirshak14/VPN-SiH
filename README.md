@@ -50,6 +50,8 @@ cd frontend && npm ci && npm run dev                                     # http:
 
 `npm ci` may print a harmless warning that esbuild's postinstall script is not pre-approved; the build works regardless.
 
+**Sample gallery.** The landing page opens on a gallery of bundled captures: each card has a short story and a result preview (top risk, tunnels, violations, the main rules), and one click opens the full analysis. Only the stories are authored (`backend/ipsec_analyzer/api/gallery.py`); every number is computed by the real pipeline when the server starts and is never stored, and a test checks that each preview equals the analysis it opens. A capture without a curated story still gets a card. `GET /api/samples` returns the same data.
+
 **UI smoke test.** With the API and the UI running, `cd frontend && npm run e2e` drives a real browser through upload, a bundled scenario, the results page, a tunnel, and the Evaluation page,
 checking every figure against the API (needs Node 22+ and Chrome, Chromium or Edge; it deletes the analyses it creates). CI runs it on every push and pull request (`e2e` job); it passes `--no-sandbox` automatically when run as root, e.g. in a container.
 

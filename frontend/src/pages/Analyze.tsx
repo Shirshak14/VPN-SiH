@@ -1,6 +1,6 @@
 import { DragEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Analysis, Sample, api } from "../api";
-import { Empty, ErrorBox, Loading, Prov } from "../ui";
+import { Empty, ErrorBox, Loading, Prov, Sev } from "../ui";
 
 const STEPS = [
   { key: "capture", title: "PCAP / capture", sub: "upload or pick a sample" },
@@ -24,6 +24,38 @@ function Pipeline({ stage }: { stage: string | null }) {
   );
 }
 
+const KINDS: [string, string][] = [
+  ["all", "All"], ["tour", "Full audit"], ["weak", "Weak crypto"], ["downgrade", "Downgrade"], ["anomaly", "Behaviour"], ["baseline", "Clean"], ["real", "Third-party"],
+];
+
+function Card({ s, busy, active, onOpen }: { s: Sample; busy: boolean; active: boolean; onOpen: () => void }) {
+  const p = s.preview;
+  const shown = p?.rules.slice(0, 3) ?? [];
+  return (
+    <li className={`gal-card${s.order === 0 ? " featured" : ""}`}>
+      <div className="gal-top"><Prov p={s.provenance} />{s.has_keys && <span className="chip" title="A decryption key file ships with this capture">keys included</span>}</div>
+      <h3>{s.title}</h3>
+      <p className="small muted gal-story">{s.story}</p>
+      <div className="gal-result" aria-label="Result preview">
+        {p == null ? <span className="small muted"><span className="spinner" /> scoring…</span> : (
+          <>
+            <span className="gal-score">{p.top_score ?? "n/a"}</span>
+            {p.top_band && <Sev level={p.top_band} />}
+            <span className="small muted">{p.tunnels} tunnel{p.tunnels === 1 ? "" : "s"} · {p.violations === 0 ? "no violations" : `${p.violations} violation${p.violations === 1 ? "" : "s"}`}{p.anomalous > 0 ? ` · ${p.anomalous} anomalous` : ""}</span>
+          </>
+        )}
+      </div>
+      <div className="gal-rules">
+        {shown.map((r) => <span key={r.rule_id} className={`chip ${r.severity}`}>{r.rule_id}</span>)}
+        {p && p.rule_count > shown.length && <span className="small muted">+{p.rule_count - shown.length} more</span>}
+      </div>
+      <button className={s.order === 0 ? "primary" : ""} disabled={busy} onClick={onOpen} aria-label={`Analyze ${s.name}`}>
+        {active ? <><span className="spinner" /> Analysing…</> : "See the analysis →"}
+      </button>
+    </li>
+  );
+}
+
 export default function Analyze() {
   const [samples, setSamples] = useState<Sample[] | null>(null);
   const [history, setHistory] = useState<Analysis[]>([]);
@@ -32,6 +64,7 @@ export default function Analyze() {
   const [pcap, setPcap] = useState<File | null>(null);
   const [keys, setKeys] = useState<File | null>(null);
   const [over, setOver] = useState(false);
+  const [kind, setKind] = useState("all");
   const timer = useRef<number | null>(null);
 
   const load = useCallback(() => {
@@ -40,6 +73,13 @@ export default function Analyze() {
   }, []);
   useEffect(load, [load]);
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
+  // The server scores the bundled captures in the background right after it starts; refresh until every card has its numbers.
+  const waiting = samples != null && samples.some((x) => x.preview == null);
+  useEffect(() => {
+    if (!waiting) return;
+    const t = window.setTimeout(() => api.samples().then(setSamples).catch(() => undefined), 1500);
+    return () => window.clearTimeout(t);
+  }, [waiting, samples]);
 
   const poll = useCallback((a: Analysis) => {
     setRunning(a);
@@ -73,8 +113,35 @@ export default function Analyze() {
 
       {error && <ErrorBox error={error} retry={() => setError(null)} />}
 
+      <section className="az-gallery" aria-label="Sample gallery">
+        <div className="gal-head">
+          <div>
+            <h2>Try it now, no capture needed</h2>
+            <p className="small muted">One click analyses a bundled capture end to end. Each card shows the result computed from that capture.</p>
+          </div>
+          <div className="gal-filter" role="group" aria-label="Filter samples">
+            {KINDS.filter(([k]) => k === "all" || samples?.some((x) => x.kind === k)).map(([k, label]) => (
+              <button key={k} aria-pressed={kind === k} className={kind === k ? "on" : ""} onClick={() => setKind(k)}>{label}</button>
+            ))}
+          </div>
+        </div>
+        {samples == null && !error ? <Loading what="Loading samples" /> : samples && samples.length === 0 ? (
+          <Empty>No bundled captures found. Run <code>python -m synth.generate</code>.</Empty>
+        ) : (
+          <ul className="gal-grid" aria-label="Bundled captures">
+            {samples?.filter((x) => kind === "all" || x.kind === kind).map((x) => (
+              <Card key={x.name} s={x} busy={busy} active={running?.filename === x.name && running.status !== "failed"} onOpen={() => start(() => api.analyzeSample(x.name))} />
+            ))}
+          </ul>
+        )}
+        {running && running.status !== "failed" && (
+          <p className="small az-status" role="status"><span className="spinner" /> {running.filename}: {running.stage}…</p>
+        )}
+      </section>
+
       <div className="az-work">
         <section className="az-primary" aria-label="Analyze a capture">
+          <h2>Or analyze your own capture</h2>
           <div className={`az-drop ${over ? "over" : ""}`} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5m0 0l-4 4m4-4l4 4M5 19h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
             {pcap ? <b className="mono az-file">{pcap.name}</b> : <span>Drop a .pcap / .pcapng here</span>}
@@ -98,29 +165,6 @@ export default function Analyze() {
               Analyze capture →
             </button>
           </div>
-          {running && running.status !== "failed" && (
-            <p className="small az-status" role="status"><span className="spinner" /> {running.filename}: {running.stage}…</p>
-          )}
-        </section>
-
-        <section className="az-samples" aria-label="Bundled captures">
-          <h2>Or try a bundled capture</h2>
-          {samples == null && !error ? <Loading what="Loading samples" /> : samples && samples.length === 0 ? (
-            <Empty>No bundled captures found. Run <code>python -m synth.generate</code>.</Empty>
-          ) : (
-            <ul tabIndex={0} aria-label="Bundled captures list">
-              {samples?.map((s) => (
-                <li key={s.name}>
-                  <div className="name"><b className="mono">{s.name}</b><Prov p={s.provenance} /></div>
-                  <div className="desc small muted" title={s.description}>{s.description}</div>
-                  <div className="meta">
-                    {s.has_keys && <span className="chip" title="A decryption key file ships with this capture">decryption keys included</span>}
-                  </div>
-                  <button disabled={busy} onClick={() => start(() => api.analyzeSample(s.name))} aria-label={`Analyze ${s.name}`}>Analyze →</button>
-                </li>
-              ))}
-            </ul>
-          )}
         </section>
       </div>
 
