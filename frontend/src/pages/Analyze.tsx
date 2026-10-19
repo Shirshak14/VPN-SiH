@@ -1,5 +1,5 @@
 import { DragEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Analysis, Sample, api } from "../api";
+import { Analysis, Json, Sample, api, isCapture } from "../api";
 import { Empty, ErrorBox, Loading, Prov, Sev } from "../ui";
 
 const STEPS = [
@@ -25,7 +25,7 @@ function Pipeline({ stage }: { stage: string | null }) {
 }
 
 const KINDS: [string, string][] = [
-  ["all", "All"], ["tour", "Full audit"], ["weak", "Weak crypto"], ["downgrade", "Downgrade"], ["anomaly", "Behaviour"], ["baseline", "Clean"], ["real", "Third-party"],
+  ["all", "All"], ["tour", "Full audit"], ["weak", "Weak crypto"], ["downgrade", "Downgrade"], ["anomaly", "Behaviour"], ["baseline", "Clean"], ["real", "Third-party"], ["log", "Daemon logs"],
 ];
 
 function Card({ s, busy, active, onOpen }: { s: Sample; busy: boolean; active: boolean; onOpen: () => void }) {
@@ -56,6 +56,56 @@ function Card({ s, busy, active, onOpen }: { s: Sample; busy: boolean; active: b
   );
 }
 
+function LiveIngest({ status }: { status: Json | null }) {
+  if (!status) return null;
+  const w = status.watch, sl = status.syslog;
+  const open = (id: number | null) => id != null && (window.location.hash = `#/a/${id}`);
+  return (
+    <section className="az-live card" aria-label="Live ingest">
+      <h2>Live ingest</h2>
+      {!w.enabled && !sl.enabled ? (
+        <p className="small muted">
+          Off. Set <code>WATCH_DIR</code> on the server to analyse every capture or strongSwan log dropped into a folder, and/or <code>SYSLOG_LISTEN=0.0.0.0:5514</code> to
+          receive a gateway's charon log over UDP syslog. Neither is on by default; see the README.
+        </p>
+      ) : (
+        <>
+          {w.enabled && (
+            <p className="small">
+              <b>Watching</b> <code>{w.dirs.join(", ")}</code> every {w.interval_s}s; a file is read once it has been unchanged for {w.stable_s}s.
+              {w.files.length === 0 ? " Nothing seen yet." : ` ${w.files.length} file${w.files.length === 1 ? "" : "s"} tracked.`}
+            </p>
+          )}
+          {sl.enabled && (
+            <p className="small">
+              <b>Syslog</b> listening on <code>{sl.listen}</code> (UDP){sl.allow.length ? `, only from ${sl.allow.join(", ")}` : ", any source"}.{" "}
+              {sl.sources.length === 0 ? "No gateway has sent anything yet." : sl.sources.map((x: Json) => `${x.source}: ${x.lines} lines`).join("; ")}
+              {sl.ignored > 0 && ` · ${sl.ignored} datagram${sl.ignored === 1 ? "" : "s"} ignored (not charon lines, or a source not allowed)`}
+            </p>
+          )}
+          {w.files.length > 0 && (
+            <div className="tablewrap">
+              <table>
+                <thead><tr><th>File</th><th>Kind</th><th>Last read</th><th /></tr></thead>
+                <tbody>
+                  {w.files.slice(0, 8).map((f: Json) => (
+                    <tr key={f.path} className={f.analysis_id != null ? "click" : ""} onClick={() => open(f.analysis_id)}>
+                      <td className="mono">{f.path}</td>
+                      <td>{f.kind}</td>
+                      <td>{f.at ? new Date(f.at * 1000).toLocaleTimeString() : "–"}</td>
+                      <td>{f.error ? <span className="badge critical" title={f.error}>{f.error.slice(0, 60)}</span> : <span className="badge ok">analysed</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 export default function Analyze() {
   const [samples, setSamples] = useState<Sample[] | null>(null);
   const [history, setHistory] = useState<Analysis[]>([]);
@@ -65,11 +115,13 @@ export default function Analyze() {
   const [keys, setKeys] = useState<File | null>(null);
   const [over, setOver] = useState(false);
   const [kind, setKind] = useState("all");
+  const [ingest, setIngest] = useState<Json | null>(null);
   const timer = useRef<number | null>(null);
 
   const load = useCallback(() => {
     api.samples().then(setSamples).catch((e) => setError(e.message));
     api.analyses().then(setHistory).catch(() => undefined);
+    api.ingest().then(setIngest).catch(() => undefined);
   }, []);
   useEffect(load, [load]);
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
@@ -100,13 +152,14 @@ export default function Analyze() {
     if (f) setPcap(f);
   };
   const busy = running != null && running.status !== "failed";
+  const isLog = pcap != null && !isCapture(pcap.name);
 
   return (
     <div className="az">
       <header className="az-hero">
         <h1>Automate IPsec/IKE security assessment</h1>
         <p>
-          Upload a packet capture to reconstruct tunnels, check them against NIST SP 800-77r1 and RFC 8221, score behavioural anomalies, and
+          Upload a packet capture, or a strongSwan daemon log, to reconstruct tunnels, check them against NIST SP 800-77r1 and RFC 8221, score behavioural anomalies, and
           export an audit-ready report (PDF, JSON, syslog).
         </p>
       </header>
@@ -141,13 +194,13 @@ export default function Analyze() {
 
       <div className="az-work">
         <section className="az-primary" aria-label="Analyze a capture">
-          <h2>Or analyze your own capture</h2>
+          <h2>Or analyze your own capture or log</h2>
           <div className={`az-drop ${over ? "over" : ""}`} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5m0 0l-4 4m4-4l4 4M5 19h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            {pcap ? <b className="mono az-file">{pcap.name}</b> : <span>Drop a .pcap / .pcapng here</span>}
+            {pcap ? <b className="mono az-file">{pcap.name}</b> : <span>Drop a .pcap / .pcapng, or a strongSwan .log, here</span>}
             <label className="btn">
               {pcap ? "Choose a different capture…" : "Choose capture…"}
-              <input type="file" accept=".pcap,.pcapng,.cap" hidden onChange={(e) => setPcap(e.target.files?.[0] ?? null)} />
+              <input type="file" accept=".pcap,.pcapng,.cap,.log,.txt" hidden onChange={(e) => setPcap(e.target.files?.[0] ?? null)} />
             </label>
           </div>
           <div className="az-actions">
@@ -157,16 +210,18 @@ export default function Analyze() {
                 <input type="file" hidden onChange={(e) => setKeys(e.target.files?.[0] ?? null)} />
               </label>
               <p className="small muted">
-                Optional decryption keys (Wireshark <code>ikev2_decryption_table</code> or <code>ikev1_decryption_table</code>, one file can hold both). Without them IKEv2 authentication
-                and child SAs, and IKEv1 Quick Mode, are reported as <i>not assessable</i>.
+                Optional decryption keys for captures (Wireshark <code>ikev2_decryption_table</code> or <code>ikev1_decryption_table</code>, one file can hold both). Without them IKEv2 authentication
+                and child SAs, and IKEv1 Quick Mode, are reported as <i>not assessable</i>. A daemon log needs no keys: it already states what was negotiated.
               </p>
             </div>
-            <button className="primary az-go" disabled={!pcap || busy} onClick={() => pcap && start(() => api.upload(pcap, keys))}>
-              Analyze capture →
+            <button className="primary az-go" disabled={!pcap || busy} onClick={() => pcap && start(() => (isLog ? api.uploadLog(pcap) : api.upload(pcap, keys)))}>
+              {isLog ? "Analyze log →" : "Analyze capture →"}
             </button>
           </div>
         </section>
       </div>
+
+      <LiveIngest status={ingest} />
 
       <section className="az-pipeline" aria-label="How it works">
         <Pipeline stage={running ? (running.status === "queued" ? "capture" : running.stage) : null} />

@@ -10,6 +10,7 @@ optional rekeys, then teardown. Output: data/captures/<name>.pcap + manifest.jso
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import textwrap
@@ -138,12 +139,27 @@ def run(sc: Scenario, tmp: Path) -> dict:
         sh("docker", "cp", f"{ini}:/cap.pcap", str(OUT / f"{sc.name}.pcap"))
         log = sh("docker", "exec", ini, "cat", "/var/log/charon.log", check=False).stdout
         (tmp / f"{sc.name}.charon.log").write_text(log)
+        (OUT / f"{sc.name}.charon.log").write_text(strip_hexdumps(log))  # real daemon log, for the log-ingestion tests
         (tmp / f"{sc.name}.resp.charon.log").write_text(sh("docker", "exec", rsp, "cat", "/var/log/charon.log", check=False).stdout)
         has_keys = ok and sc.ike_version == 2 and export_keys(OUT / f"{sc.name}.pcap", log, OUT / f"{sc.name}.keys")
         return {"handshake_ok": ok, "keys": bool(has_keys)}
     finally:
         for c in (ini, rsp):
             sh("docker", "rm", "-f", c, check=False)
+
+
+def strip_hexdumps(log: str) -> str:
+    """Drop charon's verbose key/nonce hexdumps ("... => N bytes" plus its indented hex lines): large and not needed to read proposals."""
+    out, skipping = [], False
+    for ln in log.splitlines():
+        if re.search(r"\[\w+\] .*=> \d+ bytes", ln):
+            skipping = True
+            continue
+        if skipping and re.search(r"\d+\[\w+\]\s+\d+: [0-9A-F]{2} ", ln):
+            continue
+        skipping = False
+        out.append(ln)
+    return "\n".join(out) + "\n"
 
 
 def _hexblocks(log: str) -> dict[str, bytes]:

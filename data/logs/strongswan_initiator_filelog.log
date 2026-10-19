@@ -1,0 +1,15 @@
+Oct 19 09:00:00 00[DMN] Starting IKE charon daemon (strongSwan 5.9.8, Linux 5.15.0, x86_64)
+Oct 19 09:00:05 03[IKE] <branch|1> initiating IKE_SA branch[1] to 198.51.100.1
+Oct 19 09:00:05 03[CFG] <branch|1> configured proposals: IKE:AES_CBC_256/HMAC_SHA2_256_128/PRF_HMAC_SHA2_256/MODP_2048
+Oct 19 09:00:05 03[ENC] <branch|1> generating IKE_SA_INIT request 0 [ SA KE No N(NATD_S_IP) N(NATD_D_IP) N(FRAG_SUP) N(HASH_ALG) N(REDIR_SUP) ]
+Oct 19 09:00:05 03[NET] <branch|1> sending packet: from 192.0.2.10[500] to 198.51.100.1[500] (240 bytes)
+Oct 19 09:00:09 05[IKE] <branch|1> retransmit 1 of request with message ID 0
+Oct 19 09:00:16 05[IKE] <branch|1> retransmit 2 of request with message ID 0
+Oct 19 09:00:29 05[IKE] <branch|1> retransmit 3 of request with message ID 0
+Oct 19 09:00:31 06[ENC] <branch|1> parsed IKE_SA_INIT response 0 [ SA KE No N(NATD_S_IP) N(NATD_D_IP) N(FRAG_SUP) N(HASH_ALG) N(CHDLESS_SUP) N(MULT_AUTH) ]
+Oct 19 09:00:31 06[CFG] <branch|1> selected proposal: IKE:AES_CBC_256/HMAC_SHA2_256_128/PRF_HMAC_SHA2_256/MODP_2048
+Oct 19 09:00:31 06[IKE] <branch|1> authentication of 'branch.example.net' (myself) with RSA_EMSA_PKCS1_SHA2_256 successful
+Oct 19 09:00:31 06[IKE] <branch|1> authentication of 'gw1.example.net' with RSA_EMSA_PKCS1_SHA2_256 successful
+Oct 19 09:00:31 06[IKE] <branch|1> IKE_SA branch[1] established between 192.0.2.10[branch.example.net]...198.51.100.1[gw1.example.net]
+Oct 19 09:00:31 06[CFG] <branch|1> selected proposal: ESP:AES_CBC_128/HMAC_SHA2_256_128/NO_EXT_SEQ
+Oct 19 09:00:31 06[IKE] <branch|1> CHILD_SA branch{1} established with SPIs cd1a1b2c_i 1d2e3f40_o and TS 10.9.0.0/24 === 10.10.0.0/24

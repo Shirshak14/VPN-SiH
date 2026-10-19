@@ -65,7 +65,8 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .badge.ok { background: var(--ok-bg); color: var(--ok); }
 .badge.prov-synthetic { background: var(--warn-bg); color: var(--medium); border: 1px solid var(--warn-line); line-height: 18px; }
 .badge.prov-real-lab, .badge.prov-real-public { background: var(--ok-bg); color: var(--ok); }
-.badge.prov-user-upload { background: var(--info-bg); color: var(--info); }
+.badge.prov-user-upload, .badge.prov-watch-folder, .badge.prov-live-syslog { background: var(--info-bg); color: var(--info); }
+.badge.prov-sample-log { background: var(--warn-bg); color: var(--medium); border: 1px solid var(--warn-line); line-height: 18px; }
 .banner { border: 1px solid var(--warn-line); background: var(--warn-bg); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); font-size: var(--fs-ui); line-height: var(--lh-ui); }
 .banner.err { border-color: var(--critical); background: var(--critical-bg); color: var(--critical); }
 .chip { white-space: nowrap; display: inline-block; padding: 0 var(--sp-2); border-radius: 6px; background: var(--surface-2); font-size: var(--fs-meta); line-height: var(--sp-5); margin: 0 var(--sp-1) var(--sp-1) 0; border: 1px solid var(--line); }
@@ -352,3 +353,5 @@ tbody tr.click:focus-visible { outline: 3px solid var(--focus); outline-offset: 
 @media (min-width: 760px) { .gal-card.featured { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; grid-template-areas: "top top top" "title title title" "story result act" "story rules act"; column-gap: var(--sp-5); align-items: center; } .gal-card.featured .gal-top { grid-area: top; } .gal-card.featured h3 { grid-area: title; } .gal-card.featured .gal-story { grid-area: story; } .gal-card.featured .gal-result { grid-area: result; } .gal-card.featured .gal-rules { grid-area: rules; } .gal-card.featured button { grid-area: act; margin: 0; padding: var(--sp-3) var(--sp-6); } }
 @media (max-width: 560px) { .gal-card button, .gal-filter button { min-height: 44px; } .gal-grid { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .gal-card { transition: none; } }
+.az-live { margin-top: var(--sp-5); }
+.az-live h2 { margin-top: 0; }
