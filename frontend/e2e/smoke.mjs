@@ -87,12 +87,12 @@ try {
   // ---- 0. sign-in (only when the API is started with API_KEY)
   await nav(BASE + "/");
   if (KEY) {
-    check("locked server shows the sign-in form, not the app", await waitFor(() => !!document.querySelector("form.login") && !document.querySelector(".az-samples")));
+    check("locked server shows the sign-in form, not the app", await waitFor(() => !!document.querySelector("form.login") && !document.querySelector(".gal-grid")));
     const typeKey = async (text) => { await run(() => { const i = document.getElementById("api-key"); i.focus(); i.select(); }); await send("Input.insertText", { text }); };
     await typeKey("definitely-wrong"); await run(() => document.querySelector("form.login button.primary").click());
-    check("wrong key shows an error and stays locked", await waitFor(() => !!document.querySelector("form.login [role=alert]")) && await run(() => !document.querySelector(".az-samples")));
+    check("wrong key shows an error and stays locked", await waitFor(() => !!document.querySelector("form.login [role=alert]")) && await run(() => !document.querySelector(".gal-grid")));
     await typeKey(KEY); await run(() => document.querySelector("form.login button.primary").click());
-    check("correct key unlocks the app", await waitFor(() => !document.querySelector("form.login") && document.querySelectorAll(".az-samples li").length > 5));
+    check("correct key unlocks the app", await waitFor(() => !document.querySelector("form.login") && document.querySelectorAll(".gal-card").length > 5));
     check("signed-in session shows Sign out", await run(() => !!document.querySelector("button.linklike")));
     problems.length = 0;  // the browser logs every deliberate 401 (locked state, wrong key); only errors after sign-in count
   }
@@ -106,9 +106,26 @@ try {
   check("Evaluation URL is clean", (await run(() => location.href)) === BASE + "/#/eval");
   check("active nav link has aria-current=page", (await run(() => document.querySelector("nav a[aria-current=page]")?.textContent)) === "Evaluation");
   await clickNav("Analyze");
-  check("Analyze page opens again", await waitFor(() => document.querySelectorAll(".az-samples li").length > 5));
+  check("Analyze page opens again", await waitFor(() => document.querySelectorAll(".gal-card").length > 5));
   check("Analyze URL is clean", (await run(() => location.href)) === BASE + "/#/");
-  check("synthetic scenarios carry the SYNTHETIC (SIMULATED) label", await run(() => [...document.querySelectorAll(".az-samples li")].filter((l) => l.querySelector(".prov-synthetic")).every((l) => l.querySelector(".prov-synthetic").textContent.toLowerCase().includes("synthetic (simulated)"))));
+  check("synthetic scenarios carry the SYNTHETIC (SIMULATED) label", await run(() => [...document.querySelectorAll(".gal-card")].filter((l) => l.querySelector(".prov-synthetic")).every((l) => l.querySelector(".prov-synthetic").textContent.toLowerCase().includes("synthetic (simulated)"))));
+
+  // ---- 1b. sample gallery: cards mirror the API, filters work, phone width does not overflow
+  const SAMPLES = await api("/api/samples");
+  check("gallery shows one card per bundled capture, in the API's order", JSON.stringify(await run(() => [...document.querySelectorAll(".gal-card h3")].map((h) => h.textContent))) === JSON.stringify(SAMPLES.map((x) => x.title)), `${SAMPLES.length} cards`);
+  check("every card shows its computed result (no card left scoring)", await waitFor(() => document.querySelectorAll(".gal-result .spinner").length === 0 && document.querySelectorAll(".gal-score").length === document.querySelectorAll(".gal-card").length));
+  const fresh = await api("/api/samples");
+  check("card scores and violation counts equal the API preview", JSON.stringify(await run(() => [...document.querySelectorAll(".gal-card")].map((c) => [c.querySelector(".gal-score").textContent, c.querySelector(".gal-result .small").textContent.match(/(no|\d+) violation/)[1]]))) === JSON.stringify(fresh.map((x) => [String(x.preview.top_score), x.preview.violations === 0 ? "no" : String(x.preview.violations)])));
+  const weakN = SAMPLES.filter((x) => x.kind === "weak").length;
+  await run(() => [...document.querySelectorAll(".gal-filter button")].find((b) => b.textContent === "Weak crypto").click());
+  check("the Weak crypto filter keeps only weak-crypto cards", await run((n) => document.querySelectorAll(".gal-card").length === n && !!document.querySelector(".gal-filter button[aria-pressed=true]")?.textContent.includes("Weak"), weakN), `${weakN} cards`);
+  await run(() => [...document.querySelectorAll(".gal-filter button")].find((b) => b.textContent === "All").click());
+  check("All restores every card", await run((n) => document.querySelectorAll(".gal-card").length === n, SAMPLES.length));
+  await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await sleep(300);
+  check("landing page does not overflow a 390px phone", await run(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), await run(() => `${document.documentElement.scrollWidth} > ${document.documentElement.clientWidth}`));
+  check("gallery buttons are at least 44px tall on a phone", await run(() => [...document.querySelectorAll(".gal-card button")].every((b) => b.getBoundingClientRect().height >= 44)));
+  await send("Emulation.clearDeviceMetricsOverride");
   check("Analyze capture is disabled until a file is chosen", await run(() => document.querySelector(".az-go").disabled));
 
   // ---- 2. real file upload -> results
@@ -162,11 +179,13 @@ try {
 
   // ---- 4. bundled scenario button
   await nav(BASE + "/#/");
-  await waitFor(() => document.querySelectorAll(".az-samples li button").length > 0);
+  await waitFor(() => document.querySelectorAll(".gal-card button").length > 0);
   const before = (await api("/api/analyses")).map((a) => a.id);
-  await run(() => document.querySelector(".az-samples li button").click());
+  const card0 = await run(() => ({ title: document.querySelector(".gal-card h3").textContent, score: document.querySelector(".gal-score").textContent, tunnels: document.querySelector(".gal-result .small").textContent.split(" ")[0] }));
+  await run(() => document.querySelector(".gal-card button").click());
   check("bundled scenario opens the results page", await waitFor(() => /^#\/a\/\d+$/.test(location.hash) && !!document.querySelector(".res-summary"), [], 40000), await hash());
   for (const a of await api("/api/analyses")) if (!before.includes(a.id)) created.push(a.id);
+  check("the card's preview matches the analysis it opens", await run((c) => document.querySelector(".hero-score").textContent === c.score && document.querySelector(".kpis li b").textContent === c.tunnels, card0), JSON.stringify(card0));
   check("synthetic scenario results show the compact SYNTHETIC notice with its original wording", await run(() => { const b = document.querySelector(".banner.compact"); return !!b && b.textContent.includes("Simulated capture.") && b.textContent.includes("not a captured real-world incident") && document.querySelector("h1 .badge")?.textContent.toLowerCase().includes("synthetic (simulated)"); }));
 
   // ---- 5. Evaluation page: every number comes from /api/metrics

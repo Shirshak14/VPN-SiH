@@ -14,11 +14,25 @@ export interface Analysis {
   summary: Json;
   has_keys: boolean;
 }
+export interface SamplePreview {
+  tunnels: number;
+  violations: number;
+  top_score: number | null;
+  top_band: string | null;
+  anomalous: number;
+  rules: { rule_id: string; severity: string }[];
+  rule_count: number;
+}
 export interface Sample {
   name: string;
   provenance: string;
   description: string;
   has_keys: boolean;
+  title: string;
+  story: string;
+  kind: string;
+  order: number;
+  preview: SamplePreview | null;
 }
 
 export interface AuthState {
