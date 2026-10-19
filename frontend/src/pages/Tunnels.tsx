@@ -73,7 +73,7 @@ export default function Tunnels({ aid }: { aid: number }) {
         </div>
       </header>
 
-      <ProvBanner p={a.provenance} compact />
+      <ProvBanner p={a.provenance} compact vpn={s.vpn_tunnels > 0 && s.vpn_tunnels === s.tunnel_count} />
       {s.source === "log" && (
         <div className="banner compact" role="note">
           <b>Assessed from a daemon log, not from packets.</b> {s.log?.charon_lines} charon lines gave {s.log?.ike_sas} IKE SA{s.log?.ike_sas === 1 ? "" : "s"}.
@@ -81,11 +81,24 @@ export default function Tunnels({ aid }: { aid: number }) {
           handshake floods are not visible in a log, so the anomaly model is not applied. Only strongSwan logs are read.
         </div>
       )}
-      {s.other_vpn?.length > 0 && (
+      {s.source === "config" && (
         <div className="banner compact" role="note">
-          <b>Other VPN traffic seen, not analysed:</b>{" "}
-          {s.other_vpn.map((v: Json) => `${v.protocol} (${v.handshake_initiations} handshake${v.handshake_initiations === 1 ? "" : "s"}, ${v.packets} packets, e.g. ${v.top_flows[0]?.flow})`).join("; ")}.
-          {" "}This tool assesses IPsec/IKE only. WireGuard has a fixed Noise cipher suite (nothing to negotiate or audit); OpenVPN negotiates its ciphers inside TLS, which is not visible without keys. Detection is by packet shape and, for OpenVPN, UDP port 1194.
+          <b>Assessed from a configuration file, not from traffic.</b> It shows what the operator asked for; the peers, versions and compiled-in defaults decide what is actually
+          negotiated, so capture a handshake to confirm. Private keys and inline secrets were removed before the file was stored.
+        </div>
+      )}
+      {s.vpn_tunnels > 0 && s.source !== "config" && (
+        <div className="banner compact" role="note">
+          <b>OpenVPN / WireGuard sessions are assessed from the wire.</b> OpenVPN: control-channel protection and, when the control channel is not encrypted, the TLS version, suite and server
+          certificate. WireGuard: handshakes, key lifetimes and flood or replay signs. Data-channel ciphers (OpenVPN) and pre-shared-key use (WireGuard) are never visible in a
+          capture; upload the configuration file to assess them.
+        </div>
+      )}
+      {s.other_vpn?.some((v: Json) => !v.analysed) && (
+        <div className="banner compact" role="note">
+          <b>Other VPN traffic seen, no session recognised well enough to assess:</b>{" "}
+          {s.other_vpn.filter((v: Json) => !v.analysed).map((v: Json) => `${v.protocol} (${v.handshake_initiations} handshake${v.handshake_initiations === 1 ? "" : "s"}, ${v.packets} packets, e.g. ${v.top_flows[0]?.flow})`).join("; ")}.
+          {" "}Detection is by packet shape, and for OpenVPN a protected control channel is only recognised once the server answers, or on UDP port 1194.
         </div>
       )}
       {s.parse_errors?.length > 0 && <div className="banner compact">{s.ike_malformed} malformed IKE datagram(s) skipped, e.g. {s.parse_errors[0]}</div>}
@@ -127,10 +140,10 @@ export default function Tunnels({ aid }: { aid: number }) {
 
       <section className="res-section">
         <div className="sec-head"><h2>Tunnels — highest risk first</h2><span className="small muted">select a row for full details</span></div>
-        {tunnels.length === 0 ? <div className="empty">No IKE or ESP tunnels were found in this capture.</div> : (
+        {tunnels.length === 0 ? <div className="empty">No IKE, ESP, OpenVPN or WireGuard tunnels were found in this capture.</div> : (
           <div className="tablewrap">
             <table>
-              <thead><tr><th>Risk</th><th>Peers</th><th>Mode</th><th>Negotiated IKE suite</th><th>Findings</th><th>Anomaly</th></tr></thead>
+              <thead><tr><th>Risk</th><th>Peers</th><th>Mode</th><th>Negotiated suite</th><th>Findings</th><th>Anomaly</th></tr></thead>
               <tbody>
                 {tunnels.map((t) => {
                   const g = groupViolations(t.violations);

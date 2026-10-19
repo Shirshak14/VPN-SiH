@@ -2,10 +2,11 @@ import { ReactNode } from "react";
 
 const PROV_LABEL: Record<string, string> = {
   synthetic: "synthetic (simulated)",
-  "real-lab": "real · strongSwan lab",
+  "real-lab": "real · lab traffic",
   "real-public": "real · public sample",
   "user-upload": "user upload",
   "sample-log": "hand-written sample log",
+  "sample-config": "hand-written sample config",
   "watch-folder": "watched folder",
   "live-syslog": "live syslog",
 };
@@ -46,7 +47,7 @@ export function Empty({ children }: { children: ReactNode }) {
   return <div className="empty">{children}</div>;
 }
 
-export function ProvBanner({ p, compact = false }: { p: string; compact?: boolean }) {
+export function ProvBanner({ p, compact = false, vpn = false }: { p: string; compact?: boolean; vpn?: boolean }) {
   const cls = compact ? "banner compact" : "banner";
   if (p === "synthetic")
     return (
@@ -55,7 +56,10 @@ export function ProvBanner({ p, compact = false }: { p: string; compact?: boolea
         demonstrate the analyzer working on known configurations; they are <b>not</b> a captured real-world incident.
       </div>
     );
-  const real = p === "real-lab"
+  const real = p === "real-lab" && vpn
+    ? <><b>Real traffic, lab scenario.</b> Genuine OpenVPN or WireGuard packets exchanged between two peers on one test machine (network namespaces), captured with tcpdump.
+        The weak configurations are deliberate lab setups, not real-world incidents.</>
+    : p === "real-lab"
     ? <><b>Real traffic, lab scenario.</b> Genuine IKE/ESP exchanged between two strongSwan daemons in Docker. Weak or downgrade
         configurations are deliberate lab setups, not real-world incidents.</>
     : p === "real-public" ? <><b>Real capture.</b> Public third-party sample from the Wireshark test suite.</> : null;

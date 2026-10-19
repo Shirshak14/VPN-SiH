@@ -1,5 +1,5 @@
 import { DragEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Analysis, Json, Sample, api, isCapture } from "../api";
+import { Analysis, Json, Sample, api, isCapture, isConfig } from "../api";
 import { Empty, ErrorBox, Loading, Prov, Sev } from "../ui";
 
 const STEPS = [
@@ -10,8 +10,12 @@ const STEPS = [
   { key: "done", title: "Score, map, remediate", sub: "risk 0–100 · MITRE · PDF" },
 ];
 
+// OpenVPN / WireGuard captures and configuration files report their own stage names; they sit at the same place in the flow.
+const STAGE_ALIAS: Record<string, string> = { "reading configuration": "parsing IKE/ESP", "OpenVPN / WireGuard rules": "rules + anomaly model" };
+
 function Pipeline({ stage }: { stage: string | null }) {
-  const idx = stage == null ? -1 : stage === "done" ? STEPS.length : STEPS.findIndex((s) => s.key === stage);
+  const key = stage == null ? null : STAGE_ALIAS[stage] ?? stage;
+  const idx = key == null ? -1 : key === "done" ? STEPS.length : STEPS.findIndex((s) => s.key === key);
   return (
     <ol className="az-flow" aria-label="Analysis pipeline">
       {STEPS.map((s, i) => (
@@ -25,7 +29,7 @@ function Pipeline({ stage }: { stage: string | null }) {
 }
 
 const KINDS: [string, string][] = [
-  ["all", "All"], ["tour", "Full audit"], ["weak", "Weak crypto"], ["downgrade", "Downgrade"], ["anomaly", "Behaviour"], ["baseline", "Clean"], ["real", "Third-party"], ["log", "Daemon logs"],
+  ["all", "All"], ["tour", "Full audit"], ["weak", "Weak crypto"], ["downgrade", "Downgrade"], ["anomaly", "Behaviour"], ["baseline", "Clean"], ["real", "Third-party"], ["log", "Daemon logs"], ["vpn", "OpenVPN & WireGuard"], ["config", "Config files"],
 ];
 
 function Card({ s, busy, active, onOpen }: { s: Sample; busy: boolean; active: boolean; onOpen: () => void }) {
@@ -152,15 +156,16 @@ export default function Analyze() {
     if (f) setPcap(f);
   };
   const busy = running != null && running.status !== "failed";
-  const isLog = pcap != null && !isCapture(pcap.name);
+  const what = pcap == null ? "capture" : isCapture(pcap.name) ? "capture" : isConfig(pcap.name) ? "config" : "log";
+  const go = (f: File) => (what === "config" ? api.uploadConfig(f) : what === "log" ? api.uploadLog(f) : api.upload(f, keys));
 
   return (
     <div className="az">
       <header className="az-hero">
-        <h1>Automate IPsec/IKE security assessment</h1>
+        <h1>Automate VPN security assessment</h1>
         <p>
-          Upload a packet capture, or a strongSwan daemon log, to reconstruct tunnels, check them against NIST SP 800-77r1 and RFC 8221, score behavioural anomalies, and
-          export an audit-ready report (PDF, JSON, syslog).
+          Upload a packet capture, a strongSwan daemon log or an OpenVPN / WireGuard configuration to reconstruct tunnels, check them against NIST SP 800-77r1, RFC 8221 and the OpenVPN and
+          WireGuard hardening rules, score behavioural anomalies, and export an audit-ready report (PDF, JSON, syslog).
         </p>
       </header>
 
@@ -194,13 +199,13 @@ export default function Analyze() {
 
       <div className="az-work">
         <section className="az-primary" aria-label="Analyze a capture">
-          <h2>Or analyze your own capture or log</h2>
+          <h2>Or analyze your own capture, log or config</h2>
           <div className={`az-drop ${over ? "over" : ""}`} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5m0 0l-4 4m4-4l4 4M5 19h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            {pcap ? <b className="mono az-file">{pcap.name}</b> : <span>Drop a .pcap / .pcapng, or a strongSwan .log, here</span>}
+            {pcap ? <b className="mono az-file">{pcap.name}</b> : <span>Drop a .pcap / .pcapng, a strongSwan .log or an OpenVPN / WireGuard .ovpn / .conf here</span>}
             <label className="btn">
               {pcap ? "Choose a different capture…" : "Choose capture…"}
-              <input type="file" accept=".pcap,.pcapng,.cap,.log,.txt" hidden onChange={(e) => setPcap(e.target.files?.[0] ?? null)} />
+              <input type="file" accept=".pcap,.pcapng,.cap,.log,.txt,.ovpn,.conf" hidden onChange={(e) => setPcap(e.target.files?.[0] ?? null)} />
             </label>
           </div>
           <div className="az-actions">
@@ -211,11 +216,11 @@ export default function Analyze() {
               </label>
               <p className="small muted">
                 Optional decryption keys for captures (Wireshark <code>ikev2_decryption_table</code> or <code>ikev1_decryption_table</code>, one file can hold both). Without them IKEv2 authentication
-                and child SAs, and IKEv1 Quick Mode, are reported as <i>not assessable</i>. A daemon log needs no keys: it already states what was negotiated.
+                and child SAs, and IKEv1 Quick Mode, are reported as <i>not assessable</i>. A daemon log needs no keys: it already states what was negotiated. A configuration file is read for what it asks for; private keys inside it are removed before anything is stored.
               </p>
             </div>
-            <button className="primary az-go" disabled={!pcap || busy} onClick={() => pcap && start(() => (isLog ? api.uploadLog(pcap) : api.upload(pcap, keys)))}>
-              {isLog ? "Analyze log →" : "Analyze capture →"}
+            <button className="primary az-go" disabled={!pcap || busy} onClick={() => pcap && start(() => go(pcap))}>
+              {what === "log" ? "Analyze log →" : what === "config" ? "Analyze config →" : "Analyze capture →"}
             </button>
           </div>
         </section>

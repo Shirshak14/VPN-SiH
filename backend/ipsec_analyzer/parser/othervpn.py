@@ -1,7 +1,8 @@
 """Inventory of non-IPsec VPN traffic (WireGuard, OpenVPN) seen on UDP.
 
-Detection only: the analyzer assesses IPsec/IKE, and says so when a capture also holds other VPNs instead of
-silently ignoring them. Nothing here is a security assessment.
+This is the coarse inventory (what was seen, how many packets). The security assessment of OpenVPN and WireGuard
+sessions is in `ipsec_analyzer.vpn`: the same packets are fed to its trackers first, so a session they recognise is counted
+here too, whatever port it uses. Packets they do not claim fall back to the port/length heuristics below.
 
 WireGuard (whitepaper, "Messages"): every message starts with a 1-byte type (1 initiation, 2 response, 3 cookie reply,
 4 transport) and three zero bytes; handshake messages have fixed lengths (148 / 92 / 64 bytes); transport packets are a
@@ -17,6 +18,9 @@ bytes would be misreported. Ciphers are negotiated inside TLS and are not visibl
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+
+from ..vpn.openvpn import OpenVpnTracker
+from ..vpn.wireguard import WireGuardTracker
 
 WG_HANDSHAKE_LEN = {1: 148, 2: 92, 3: 64}
 OVPN_PORT = 1194
@@ -46,9 +50,20 @@ class OtherVpnInventory:
     def __init__(self) -> None:
         self.tallies: dict[str, VpnTally] = {}
         self._confirmed: set[tuple] = set()  # (protocol, frozenset of the two endpoints)
+        self.wireguard = WireGuardTracker()
+        self.openvpn = OpenVpnTracker()
 
-    def observe(self, ts: float, src: str, dst: str, sport: int, dport: int, data: bytes) -> None:
-        kind = self._classify(src, dst, sport, dport, data)
+    def observe(self, ts: float, src: str, dst: str, sport: int, dport: int, data: bytes, frame: int = 0) -> None:
+        kind = None
+        for proto_, tracker in (("WireGuard", self.wireguard), ("OpenVPN", self.openvpn)):
+            role_ = tracker.observe(ts, frame, src, dst, sport, dport, data)
+            if role_ is not None:
+                kind = (proto_, role_)
+                if role_ in ("init", "resp"):  # a handshake seen by a tracker also confirms the flow for the packet-shape fallback below
+                    self._confirmed.add((proto_, frozenset(((src, sport), (dst, dport)))))
+                break
+        if kind is None:
+            kind = self._classify(src, dst, sport, dport, data)
         if kind is None:
             return
         proto, role = kind

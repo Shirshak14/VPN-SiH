@@ -85,10 +85,13 @@ def build_html(analysis: dict[str, Any], tunnels: list[dict[str, Any]]) -> str:
         ("IKE messages", sm["ike_messages"]), ("ESP packets", sm["esp_packets"]), ("packets", sm["packets"])]) + "</div>")
     o.append(f'<p class="small muted">Decryption keys supplied for {sm["decrypted_tunnels"]} tunnel(s); IKEv2 authentication and child SAs, and IKEv1 Quick Mode, '
              f'are reported as not assessable without them. Analysed in {analysis["seconds"]} s.</p>')
-    if sm.get("other_vpn"):
-        o.append('<div class="note"><b>Other VPN traffic seen, not analysed:</b> ' + _e("; ".join(f'{v["protocol"]} ({v["packets"]} packets)' for v in sm["other_vpn"])) + ".</div>")
+    unanalysed = [v for v in sm.get("other_vpn", []) if not v.get("analysed")]
+    if unanalysed:
+        o.append('<div class="note"><b>Other VPN traffic seen, no session recognised well enough to assess:</b> ' + _e("; ".join(f'{v["protocol"]} ({v["packets"]} packets)' for v in unanalysed)) + ".</div>")
+    if sm.get("source") == "config":
+        o.append('<div class="note"><b>Assessed from a configuration file.</b> A configuration shows what an operator asked for, not what two peers negotiated; secrets in the file were removed before analysis.</div>')
 
-    o.append("<h2>Tunnels, highest risk first</h2><table><thead><tr><th>Risk</th><th>Peers</th><th>Mode</th><th>Negotiated IKE suite</th><th>Violations</th></tr></thead><tbody>")
+    o.append("<h2>Tunnels, highest risk first</h2><table><thead><tr><th>Risk</th><th>Peers</th><th>Mode</th><th>Negotiated suite</th><th>Violations</th></tr></thead><tbody>")
     for t in tunnels:
         tu, n = t["tunnel"], sum(1 for f in t["findings"] if f["category"] == "violation")
         o.append(f'<tr><td><b>{t["risk"]["score"]}</b> {_badge(t["risk"]["band"])}</td>'

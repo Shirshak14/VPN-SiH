@@ -141,10 +141,11 @@ def parse_pcap(path: str | Path, *, keys=None) -> ParsedCapture:
 
     stats.parse_seconds = time.perf_counter() - t0
     stats.other_vpn = vpn.summary()
+    vpn_tunnels = vpn.wireguard.results() + vpn.openvpn.tunnels()
     stats.ike_messages = len(ike)
     stats.esp_packets = esp.packets[_IP_PROTO_ESP]
     stats.ah_packets = esp.packets[_IP_PROTO_AH]
-    cap = ParsedCapture(path=path, ike=ike, esp_flows=list(esp.flows.values()), stats=stats)
+    cap = ParsedCapture(path=path, ike=ike, esp_flows=list(esp.flows.values()), stats=stats, vpn_tunnels=vpn_tunnels)
     if keys:
         from .decrypt import apply_keys  # local import: optional dependency on `cryptography`
         apply_keys(cap, keys)
@@ -224,4 +225,4 @@ def _handle_udp(src, dst, sport, dport, data: bytes, frame_no, ts, ike, esp, sta
             esp.add(ts, src, dst, _IP_PROTO_ESP, spi, seq, len(data), udp_encap=True)
     else:
         stats.other_udp += 1
-        vpn.observe(ts, src, dst, sport, dport, data)
+        vpn.observe(ts, src, dst, sport, dport, data, frame_no)

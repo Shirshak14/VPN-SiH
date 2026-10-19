@@ -1,0 +1,223 @@
+{
+ "ovpn_port_4443": {
+  "file": "ovpn_port_4443.pcap",
+  "protocol": "OpenVPN",
+  "version": "2.6.19",
+  "port": 4443,
+  "description": "OpenVPN 2.6, TLS 1.3, plain control channel on UDP/4443 (not the default port)",
+  "ground_truth": {
+   "control_protection": "none",
+   "tls_version": "TLSv1.3",
+   "tls_cipher": "TLS_AES_256_GCM_SHA384",
+   "data_cipher": "AES-256-GCM",
+   "connected": true
+  },
+  "ground_truth_source": "client log lines 'Control Channel:' / 'Data Channel:' and the options this script wrote"
+ },
+ "ovpn_tls10_legacy": {
+  "file": "ovpn_tls10_legacy.pcap",
+  "protocol": "OpenVPN",
+  "version": "2.6.19",
+  "port": 1194,
+  "description": "OpenVPN 2.6 forced to TLS 1.0 (seclevel 0)",
+  "ground_truth": {
+   "control_protection": "none",
+   "tls_version": "TLSv1",
+   "tls_cipher": "ECDHE-RSA-AES256-SHA",
+   "data_cipher": "AES-256-GCM",
+   "connected": true
+  },
+  "ground_truth_source": "client log lines 'Control Channel:' / 'Data Channel:' and the options this script wrote"
+ },
+ "ovpn_tls12_cbc_sha1": {
+  "file": "ovpn_tls12_cbc_sha1.pcap",
+  "protocol": "OpenVPN",
+  "version": "2.6.19",
+  "port": 1194,
+  "description": "OpenVPN 2.6, TLS 1.2 with ECDHE-RSA-AES128-SHA (CBC + SHA-1 suite)",
+  "ground_truth": {
+   "control_protection": "none",
+   "tls_version": "TLSv1.2",
+   "tls_cipher": "ECDHE-RSA-AES128-SHA",
+   "data_cipher": "AES-256-GCM",
+   "connected": true
+  },
+  "ground_truth_source": "client log lines 'Control Channel:' / 'Data Channel:' and the options this script wrote"
+ },
+ "ovpn_tls12_rsa_kex": {
+  "file": "ovpn_tls12_rsa_kex.pcap",
+  "protocol": "OpenVPN",
+  "version": "2.6.19",
+  "port": 1194,
+  "description": "OpenVPN 2.6, TLS 1.2 with AES128-SHA (static RSA key exchange: no forward secrecy)",
+  "ground_truth": {
+   "control_protection": "none",
+   "tls_version": "TLSv1.2",
+   "tls_cipher": "AES128-SHA",
+   "data_cipher": "AES-256-GCM",
+   "connected": true
+  },
+  "ground_truth_source": "client log lines 'Control Channel:' / 'Data Channel:' and the options this script wrote"
+ },
+ "ovpn_tls12_tlsauth_gcm": {
+  "file": "ovpn_tls12_tlsauth_gcm.pcap",
+  "protocol": "OpenVPN",
+  "version": "2.6.19",
+  "port": 1194,
+  "description": "OpenVPN 2.6, TLS 1.2 ECDHE-RSA-AES256-GCM, tls-auth (HMAC only: control channel readable)",
+  "ground_truth": {
+   "control_protection": "tls-auth",
+   "tls_version": "TLSv1.2",
+   "tls_cipher": "ECDHE-RSA-AES256-GCM-SHA384",
+   "data_cipher": "AES-256-GCM",
+   "connected": true
+  },
+  "ground_truth_source": "client log lines 'Control Channel:' / 'Data Channel:' and the options this script wrote"
+ },
+ "ovpn_tls13_plain": {
+  "file": "ovpn_tls13_plain.pcap",
+  "protocol": "OpenVPN",
+  "version": "2.6.19",
+  "port": 1194,
+  "description": "OpenVPN 2.6, TLS 1.3, no tls-auth/tls-crypt: control channel readable",
+  "ground_truth": {
+   "control_protection": "none",
+   "tls_version": "TLSv1.3",
+   "tls_cipher": "TLS_AES_256_GCM_SHA384",
+   "data_cipher": "AES-256-GCM",
+   "connected": true
+  },
+  "ground_truth_source": "client log lines 'Control Channel:' / 'Data Channel:' and the options this script wrote"
+ },
+ "ovpn_tls13_tlscrypt": {
+  "file": "ovpn_tls13_tlscrypt.pcap",
+  "protocol": "OpenVPN",
+  "version": "2.6.19",
+  "port": 1194,
+  "description": "OpenVPN 2.6, TLS 1.3, tls-crypt: control channel encrypted",
+  "ground_truth": {
+   "control_protection": "tls-crypt",
+   "tls_version": "TLSv1.3",
+   "tls_cipher": "TLS_AES_256_GCM_SHA384",
+   "data_cipher": "AES-256-GCM",
+   "connected": true
+  },
+  "ground_truth_source": "client log lines 'Control Channel:' / 'Data Channel:' and the options this script wrote"
+ },
+ "ovpn_tls13_tlscrypt_v2": {
+  "file": "ovpn_tls13_tlscrypt_v2.pcap",
+  "protocol": "OpenVPN",
+  "version": "2.6.19",
+  "port": 1194,
+  "description": "OpenVPN 2.6, TLS 1.3, tls-crypt-v2 (per-client key)",
+  "ground_truth": {
+   "control_protection": "tls-crypt-v2",
+   "tls_version": "TLSv1.3",
+   "tls_cipher": "TLS_AES_256_GCM_SHA384",
+   "data_cipher": "AES-256-GCM",
+   "connected": true
+  },
+  "ground_truth_source": "client log lines 'Control Channel:' / 'Data Channel:' and the options this script wrote"
+ },
+ "ovpn_tls_mismatch": {
+  "file": "ovpn_tls_mismatch.pcap",
+  "protocol": "OpenVPN",
+  "version": "2.6.19",
+  "port": 1194,
+  "description": "OpenVPN 2.6: client requires TLS 1.3, server is capped at TLS 1.2: the handshake never completes",
+  "ground_truth": {
+   "control_protection": "none",
+   "connected": false
+  },
+  "ground_truth_source": "client log lines 'Control Channel:' / 'Data Channel:' and the options this script wrote"
+ },
+ "ovpn_unanswered": {
+  "file": "ovpn_unanswered.pcap",
+  "protocol": "OpenVPN",
+  "version": "2.6.19",
+  "port": 1194,
+  "description": "OpenVPN client whose server is not running: hard-reset retries only",
+  "ground_truth": {
+   "control_protection": "none",
+   "connected": false
+  },
+  "ground_truth_source": "client log lines 'Control Channel:' / 'Data Channel:' and the options this script wrote"
+ },
+ "ovpn_weak_cert": {
+  "file": "ovpn_weak_cert.pcap",
+  "protocol": "OpenVPN",
+  "version": "2.6.19",
+  "port": 1194,
+  "description": "OpenVPN 2.6, TLS 1.2, server certificate with a 1024-bit RSA key signed with SHA-1 (security level lowered to 0)",
+  "ground_truth": {
+   "control_protection": "none",
+   "cert_key": "RSA 1024",
+   "cert_signature": "sha1",
+   "tls_version": "TLSv1.2",
+   "tls_cipher": "ECDHE-RSA-AES256-GCM-SHA384",
+   "data_cipher": "AES-256-GCM",
+   "connected": true
+  },
+  "ground_truth_source": "client log lines 'Control Channel:' / 'Data Channel:' and the options this script wrote"
+ },
+ "wg_basic": {
+  "file": "wg_basic.pcap",
+  "protocol": "WireGuard",
+  "version": "wireguard-go 0.0.20230223",
+  "port": 51820,
+  "description": "WireGuard (wireguard-go), one handshake, ping through the tunnel",
+  "ground_truth": {
+   "suite": "Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s",
+   "preshared_key": false,
+   "peer_answered": true,
+   "min_handshakes": 1,
+   "persistent_keepalive": 5
+  },
+  "ground_truth_source": "the configuration this script wrote (WireGuard has no negotiation; the suite is fixed by the protocol)"
+ },
+ "wg_psk": {
+  "file": "wg_psk.pcap",
+  "protocol": "WireGuard",
+  "version": "wireguard-go 0.0.20230223",
+  "port": 51820,
+  "description": "WireGuard with a PresharedKey: identical on the wire to wg_basic (the PSK is invisible)",
+  "ground_truth": {
+   "suite": "Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s",
+   "preshared_key": true,
+   "peer_answered": true,
+   "min_handshakes": 1,
+   "persistent_keepalive": 5
+  },
+  "ground_truth_source": "the configuration this script wrote (WireGuard has no negotiation; the suite is fixed by the protocol)"
+ },
+ "wg_rekey": {
+  "file": "wg_rekey.pcap",
+  "protocol": "WireGuard",
+  "version": "wireguard-go 0.0.20230223",
+  "port": 51820,
+  "description": "WireGuard kept busy for 2+ minutes: the initiator re-handshakes after 120 s",
+  "ground_truth": {
+   "suite": "Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s",
+   "preshared_key": false,
+   "peer_answered": true,
+   "min_handshakes": 2,
+   "persistent_keepalive": 5
+  },
+  "ground_truth_source": "the configuration this script wrote (WireGuard has no negotiation; the suite is fixed by the protocol)"
+ },
+ "wg_unanswered": {
+  "file": "wg_unanswered.pcap",
+  "protocol": "WireGuard",
+  "version": "wireguard-go 0.0.20230223",
+  "port": 51820,
+  "description": "WireGuard initiator whose peer is down: handshake initiations retried every 5 s, no response",
+  "ground_truth": {
+   "suite": "Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s",
+   "preshared_key": false,
+   "peer_answered": false,
+   "min_handshakes": 1,
+   "persistent_keepalive": 5
+  },
+  "ground_truth_source": "the configuration this script wrote (WireGuard has no negotiation; the suite is fixed by the protocol)"
+ }
+}
