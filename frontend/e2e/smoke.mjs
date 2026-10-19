@@ -134,7 +134,9 @@ try {
     && await run(() => !!(document.querySelector("table").compareDocumentPosition(document.querySelector(".dist")) & Node.DOCUMENT_POSITION_FOLLOWING)));
   check("an uploaded capture is labelled user upload, not synthetic", await run(() => document.querySelector("h1 .badge")?.textContent.toLowerCase() === "user upload" && !document.querySelector(".banner.compact")));
   check("table keeps all six columns", (await run(() => [...document.querySelectorAll("thead th")].map((t) => t.textContent).join("|"))) === "Risk|Peers|Mode|Negotiated IKE suite|Findings|Anomaly");
-  for (const [file, type] of [["report.pdf", "pdf"], ["export.json", "json"], ["export.syslog", "text"]]) {
+  check("results page offers the printable report, PDF, HTML, link, JSON and syslog", JSON.stringify(await run(() => [...document.querySelectorAll(".res-actions > *")].slice(0, 6).map((e) => e.textContent.trim()))) === JSON.stringify(["Open printable report", "Download PDF", "Download HTML", "Copy report link", "JSON", "Syslog / CEF"]));
+  check("printable report opens in a new tab", await run(() => { const a = document.querySelector(".res-actions a.primary"); return a.target === "_blank" && a.getAttribute("href").endsWith("/report.html"); }));
+  for (const [file, type] of [["report.pdf", "pdf"], ["report.html", "html"], ["export.json", "json"], ["export.syslog", "text"]]) {
     const r = await fetch(`${BASE}/api/analyses/${aid}/${file}`, { headers: AUTH }); await r.arrayBuffer();
     check(`download ${file} works`, r.status === 200 && (r.headers.get("content-type") || "").includes(type), r.headers.get("content-type"));
   }
@@ -183,6 +185,17 @@ try {
   const gotFam = await run(() => [...document.querySelectorAll('section[aria-label="Per scenario family"] tbody tr')].map((r) => [...r.children].map((td) => td.textContent.replace(/ +/g, " ").trim())));
   check("scenario family table is complete and in order", JSON.stringify(gotFam) === JSON.stringify(wantFam), `${gotFam.length}/${wantFam.length} rows`);
   check("Evaluation page does not overflow the viewport", await run(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
+
+  // ---- 6. printable report: renders in the browser, lists every tunnel, hides its toolbar when printing
+  await nav(`${BASE}/api/analyses/${aid}/report.html`);
+  check("report page renders with its title and one section per tunnel", await waitFor((n) => document.querySelector("h1")?.textContent === "IPsec VPN Security Assessment" && document.querySelectorAll("section.tunnel").length === n, [T.length]));
+  check("report summary and remediation match the API", await run((top, n) => Number(document.body.innerText.match(/([\d.]+)\/100/)?.[1]) === top && [...document.querySelectorAll(".fix")].length === n, top, rem.length), `top=${top} rem=${rem.length}`);
+  check("report has no external resources and fits the viewport", await run(() => !document.querySelector("link,img,iframe,[src]") && document.documentElement.scrollWidth <= document.documentElement.clientWidth));
+  await send("Emulation.setEmulatedMedia", { media: "print" });
+  check("toolbar is hidden when printing", await run(() => getComputedStyle(document.querySelector(".toolbar")).display === "none"));
+  await send("Emulation.setEmulatedMedia", { media: "" });
+  const pdf = await send("Page.printToPDF", { printBackground: true });
+  check("browser can print the report to PDF", (pdf.result?.data || "").length > 5000, `${((pdf.result?.data || "").length * 0.75 / 1024).toFixed(0)} KB`);
 
   check("no console errors or exceptions during the whole run", problems.length === 0, problems.slice(0, 3).join(" || "));
 } catch (e) {

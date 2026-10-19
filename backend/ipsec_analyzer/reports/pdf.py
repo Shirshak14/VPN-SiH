@@ -13,6 +13,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from ..scoring import FORMULA
+from .summary import attack_rollup, remediation_plan
 
 BAND = {"critical": "#b42318", "high": "#d9480f", "medium": "#b7791f", "low": "#2b6cb0", "info": "#5b6470"}
 PROV_NOTE = {
@@ -60,6 +61,26 @@ def build_pdf(analysis: dict[str, Any], tunnels: list[dict[str, Any]]) -> bytes:
     tbl = Table([[_p(c, small) for c in r] for r in rows], colWidths=[22 * mm, 42 * mm, 24 * mm, 54 * mm, 13 * mm, 19 * mm], repeatRows=1)
     tbl.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8ecf1")), ("GRID", (0, 0), (-1, -1), 0.25, colors.grey)]))
     out += [tbl, Spacer(1, 6), _p("Risk formula", h3), _p(FORMULA, small), _p("Severity weights and bands come from the policy pack.", small)]
+
+    attack = attack_rollup(tunnels)
+    out.append(_p("MITRE ATT&CK techniques", h2))
+    if attack:
+        at = Table([[_p(c, small) for c in ["Technique", "Tactic", "Tunnels", "Worst severity"]]] +
+                   [[_p(f"{a['id']} {a['name']}", small), _p(a["tactic"], small), _p(f"{a['tunnels']}/{len(tunnels)}", small), _p(a["severity"], small)] for a in attack],
+                   colWidths=[78 * mm, 44 * mm, 20 * mm, 32 * mm], repeatRows=1)
+        at.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8ecf1")), ("GRID", (0, 0), (-1, -1), 0.25, colors.grey)]))
+        out.append(at)
+    else:
+        out.append(_p("No rule finding in this capture maps to an ATT&CK technique.", body))
+    plan = remediation_plan(tunnels)
+    out.append(_p(f"Remediation plan ({len(plan)})" if plan else "Remediation plan", h2))
+    if not plan:
+        out.append(_p("No violations to remediate.", body))
+    for i, r in enumerate(plan, 1):
+        out.append(KeepTogether([
+            _p(f"{i}. [{r['severity'].upper()}] {r['title']}", ParagraphStyle("r", parent=body, fontName="Helvetica-Bold", textColor=colors.HexColor(BAND[r["severity"]]))),
+            _p(f"Addresses {', '.join(r['rules'])} on {len(r['tunnels'])} tunnel(s).", small),
+            _p(" ".join(f"({j + 1}) {st}" for j, st in enumerate(r["steps"])), body), Spacer(1, 4)]))
 
     for t in tunnels:
         tu, risk = t["tunnel"], t["risk"]
