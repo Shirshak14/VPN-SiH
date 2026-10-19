@@ -1,5 +1,5 @@
 import { DragEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Analysis, Sample, api } from "../api";
+import { Analysis, Sample, User, api } from "../api";
 import { Empty, ErrorBox, Loading, Prov } from "../ui";
 
 const STEPS = [
@@ -26,6 +26,7 @@ function Pipeline({ stage }: { stage: string | null }) {
 
 export default function Analyze() {
   const [samples, setSamples] = useState<Sample[] | null>(null);
+  const [user, setUser] = useState<User | null | undefined>(undefined);
   const [history, setHistory] = useState<Analysis[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState<Analysis | null>(null);
@@ -37,6 +38,7 @@ export default function Analyze() {
   const load = useCallback(() => {
     api.samples().then(setSamples).catch((e) => setError(e.message));
     api.analyses().then(setHistory).catch(() => undefined);
+    api.account().then((a) => setUser(a.user)).catch(() => setUser(null));
   }, []);
   useEffect(load, [load]);
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
@@ -129,7 +131,13 @@ export default function Analyze() {
       </section>
 
       <section className="az-recent">
-        <h2>Recent analyses</h2>
+        <h2>{user ? "Your recent analyses" : "Recent analyses"}</h2>
+        {user === null && (
+          <p className="small muted az-note">
+            These are shared demo analyses. <a href="#/account">Sign in</a> to keep your own private and saved between visits.
+          </p>
+        )}
+        {user && <p className="small muted az-note">Saved to {user.email}. <a href="#/history">Open full history</a></p>}
         {history.length === 0 ? <Empty>Nothing analysed yet.</Empty> : (
           <div className="tablewrap">
             <table>

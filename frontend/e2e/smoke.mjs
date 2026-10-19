@@ -184,6 +184,50 @@ try {
   check("scenario family table is complete and in order", JSON.stringify(gotFam) === JSON.stringify(wantFam), `${gotFam.length}/${wantFam.length} rows`);
   check("Evaluation page does not overflow the viewport", await run(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
 
+  // ---- 6. accounts: sign up, private saved history, persistence across sign-out/in, rename, password change, delete
+  const typeInto = async (id, text) => { await run((i) => { const e = document.getElementById(i); e.focus(); e.select(); }, id); await send("Input.insertText", { text }); };
+  const submitForm = (label) => run((l) => document.querySelector(`form[aria-label="${l}"] button:not([type=button])`).click(), label);
+  const email = `smoke-${Date.now()}@example.com`;
+  const pw = "smoke-" + Math.random().toString(36).slice(2) + "-A1";
+  await nav(BASE + "/#/account");
+  check("Account page offers sign in", await waitFor(() => !!document.querySelector('form[aria-label="Sign in to your account"]')));
+  await run(() => [...document.querySelectorAll("form .linklike")].find((b) => b.textContent === "Create an account").click());
+  await typeInto("acct-email", email); await typeInto("acct-pw", "short");
+  await submitForm("Create account");
+  check("a too-short password is rejected with a visible error", await waitFor(() => !!document.querySelector("form [role=alert]")) || await run(() => !document.getElementById("acct-pw").checkValidity()));
+  await typeInto("acct-pw", pw); await submitForm("Create account");
+  check("registering lands on the (empty) saved history", await waitFor(() => location.hash === "#/history" && document.body.innerText.includes("No saved analyses yet")), await hash());
+  check("the top bar shows the signed-in account", await run((e) => document.querySelector(".acct-link")?.textContent === e, email));
+  const hadBefore = (await api("/api/analyses")).length;
+  await nav(BASE + "/#/");
+  await waitFor(() => document.querySelectorAll(".az-samples li button").length > 0);
+  await run(() => document.querySelector(".az-samples li button").click());
+  check("analysing while signed in works", await waitFor(() => /^#\/a\/\d+$/.test(location.hash) && !!document.querySelector(".res-summary"), [], 40000), await hash());
+  await nav(BASE + "/#/history");
+  check("the analysis appears in saved history, marked private", await waitFor(() => document.querySelectorAll("tbody tr").length === 1));
+  await run(() => document.querySelector(".name-btn").click());
+  await send("Input.insertText", { text: "smoke test run" });
+  await run(() => document.querySelector(".name-input").blur());
+  check("renaming a saved analysis sticks", await waitFor(() => document.querySelector(".name-btn")?.textContent === "smoke test run"));
+  await run(() => [...document.querySelectorAll(".topbar button")].find((b) => b.textContent === "Sign out")?.click());  // API-key mode only
+  await run(() => document.querySelector(".acct-link").click());
+  await run(() => [...document.querySelectorAll("button")].find((b) => b.textContent === "Sign out").click());
+  check("signing out hides the private history", await waitFor(() => document.querySelector(".acct-link")?.textContent === "Sign in"));
+  await nav(BASE + "/#/history");
+  check("History asks anonymous visitors to sign in", await waitFor(() => document.body.innerText.includes("Sign in to keep your analyses private")));
+  await nav(BASE + "/#/account");
+  await waitFor(() => !!document.getElementById("acct-email"));
+  await typeInto("acct-email", email); await typeInto("acct-pw", "wrong-password-1"); await submitForm("Sign in to your account");
+  check("a wrong password shows an error", await waitFor(() => !!document.querySelector("form [role=alert]")));
+  for (let i = problems.length - 1; i >= 0; i--) if (problems[i].includes("401")) problems.splice(i, 1);  // the deliberate failed sign-in
+  await typeInto("acct-pw", pw); await submitForm("Sign in to your account");
+  check("signing back in restores the saved analysis with its name", await waitFor(() => location.hash === "#/history" && document.querySelector(".name-btn")?.textContent === "smoke test run"), await hash());
+  await nav(BASE + "/#/account");
+  await waitFor(() => !!document.getElementById("pw-del") || [...document.querySelectorAll("button")].some((b) => b.textContent.startsWith("Delete my account")));
+  await run(() => [...document.querySelectorAll("button")].find((b) => b.textContent.startsWith("Delete my account")).click());
+  await typeInto("pw-del", pw); await submitForm("Delete account");
+  check("deleting the account signs out and erases the saved analysis", await waitFor(() => document.querySelector(".acct-link")?.textContent === "Sign in") && (await api("/api/analyses")).length === hadBefore);
+
   check("no console errors or exceptions during the whole run", problems.length === 0, problems.slice(0, 3).join(" || "));
 } catch (e) {
   failures++;

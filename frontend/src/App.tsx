@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { api, AUTH_EVENT, AuthState } from "./api";
+import { AccountState, api, AUTH_EVENT, AuthState } from "./api";
+import Account from "./pages/Account";
 import Analyze from "./pages/Analyze";
 import Compare from "./pages/Compare";
 import Evaluation from "./pages/Evaluation";
+import History from "./pages/History";
 import Policy from "./pages/Policy";
 import TunnelDetail from "./pages/TunnelDetail";
 import Tunnels from "./pages/Tunnels";
@@ -53,11 +55,16 @@ export default function App() {
   const refresh = () => api.auth().then(setAuth).catch(() => setAuth({ required: false, authenticated: true, role: "admin" }));
   useEffect(() => {
     refresh();
+    refreshAccount();
     const on = () => setAuth((a) => (a ? { ...a, authenticated: false, role: null } : a));
     window.addEventListener(AUTH_EVENT, on);
     return () => window.removeEventListener(AUTH_EVENT, on);
   }, []);
+  const [account, setAccount] = useState<AccountState>({ registration_open: true, user: null });
+  const [acctReady, setAcctReady] = useState(false);
+  const refreshAccount = () => api.account().then(setAccount).catch(() => undefined).finally(() => setAcctReady(true));
   const locked = auth !== null && auth.required && !auth.authenticated;
+  useEffect(() => { if (!locked) refreshAccount(); }, [locked]);  // after the API-key sign-in the account endpoint becomes reachable
   let page = <Analyze />;
   let active = "analyze";
   if (p[0] === "a" && p[1] && p[2] === "t" && p[3]) {
@@ -72,6 +79,12 @@ export default function App() {
   } else if (p[0] === "policy") {
     page = <Policy key={p[1] ?? ""} aid={Number(p[1]) || undefined} />;
     active = "policy";
+  } else if (p[0] === "history") {
+    page = <History account={account} />;
+    active = "history";
+  } else if (p[0] === "account") {
+    page = <Account account={account} onChange={refreshAccount} />;
+    active = "account";
   } else if (p[0] === "eval") {
     page = <Evaluation />;
     active = "eval";
@@ -88,16 +101,22 @@ export default function App() {
         </a>
         <nav className="nav" aria-label="Main">
           <a href="#/" className={active === "analyze" ? "active" : ""} aria-current={active === "analyze" ? "page" : undefined}>Analyze</a>
+          {account.user && <a href="#/history" className={active === "history" ? "active" : ""} aria-current={active === "history" ? "page" : undefined}>History</a>}
           <a href="#/compare" className={active === "compare" ? "active" : ""} aria-current={active === "compare" ? "page" : undefined}>Compare</a>
           <a href="#/policy" className={active === "policy" ? "active" : ""} aria-current={active === "policy" ? "page" : undefined}>Policy</a>
           <a href="#/eval" className={active === "eval" ? "active" : ""} aria-current={active === "eval" ? "page" : undefined}>Evaluation</a>
         </nav>
         <span className="muted small">
           SIH26160 · prototype
+          {acctReady && !locked && (account.user ? (
+            <a href="#/account" className={`acct-link ${active === "account" ? "active" : ""}`} title="Account settings">{account.user.email}</a>
+          ) : (
+            <a href="#/account" className="acct-link">Sign in</a>
+          ))}
           {auth?.required && auth.authenticated && (
             <>
               {auth.role === "readonly" && <span className="chip" style={{ marginLeft: "var(--sp-2)" }}>read-only</span>}
-              <button className="linklike" onClick={() => api.logout().then(refresh)}>Sign out</button>
+              <button className="linklike" onClick={() => api.logout().then(() => { refresh(); setAccount((a) => ({ ...a, user: null })); })}>Sign out</button>
             </>
           )}
         </span>
