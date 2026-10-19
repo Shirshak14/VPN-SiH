@@ -37,7 +37,9 @@ try { await fetch(BASE + "/api/health"); } catch { console.error(`App not reacha
 
 const profile = mkdtempSync(path.join(tmpdir(), "ipsec-smoke-"));
 const asRoot = process.getuid?.() === 0;  // Chrome refuses to start its sandbox as root (containers); a throwaway profile is fine without it
-const chrome = spawn(browser, ["--headless=new", "--disable-gpu", ...(asRoot ? ["--no-sandbox"] : []), "--remote-debugging-port=0", "--user-data-dir=" + profile, "--window-size=1366,900", "about:blank"], { stdio: "ignore" });
+const chrome = spawn(browser, ["--headless=new", "--disable-gpu", ...(asRoot ? ["--no-sandbox"] : []), "--remote-debugging-port=0", "--user-data-dir=" + profile, "--window-size=1366,900", "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
+let chromeErr = "";
+chrome.stderr.on("data", (d) => { chromeErr = (chromeErr + d).slice(-2000); });
 const created = [];
 let ws, failures = 0;
 const problems = [];
@@ -52,9 +54,10 @@ async function cleanup() {
 
 try {
   let port;
-  for (let i = 0; i < 80 && !port; i++) {
+  for (let i = 0; i < 240 && !port; i++) {  // 60 s: a cold Chrome start on a busy CI runner can take a while
     try { port = readFileSync(path.join(profile, "DevToolsActivePort"), "utf8").split("\n")[0].trim(); } catch { await sleep(250); }
   }
+  if (!port) throw new Error("Chrome did not expose its DevTools port. Chrome said: " + (chromeErr || "(nothing)"));
   const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
   ws = new WebSocket(targets.find((t) => t.type === "page").webSocketDebuggerUrl);
   await new Promise((r) => (ws.onopen = r));
