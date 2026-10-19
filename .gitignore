@@ -16,3 +16,4 @@ data/_ui.log
 data/analyzer.db
 frontend/dist/
 data/_lab_run.log
+data/ingest/

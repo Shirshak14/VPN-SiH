@@ -39,7 +39,7 @@ def test_every_card_has_a_story_a_kind_and_a_preview(client):
     assert [c["order"] for c in cards] == sorted(c["order"] for c in cards)
     assert cards[0]["name"] == "demo_gateway_audit"  # the best first click leads
     for c in cards:
-        assert c["title"] and c["story"] and c["kind"] in {"tour", "weak", "downgrade", "anomaly", "baseline", "real"}
+        assert c["title"] and c["story"] and c["kind"] in {"tour", "weak", "downgrade", "anomaly", "baseline", "real", "log"}
         assert c["preview"], f"{c['name']} was never scored"
 
 

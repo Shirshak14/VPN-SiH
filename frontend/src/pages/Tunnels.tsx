@@ -74,6 +74,13 @@ export default function Tunnels({ aid }: { aid: number }) {
       </header>
 
       <ProvBanner p={a.provenance} compact />
+      {s.source === "log" && (
+        <div className="banner compact" role="note">
+          <b>Assessed from a daemon log, not from packets.</b> {s.log?.charon_lines} charon lines gave {s.log?.ike_sas} IKE SA{s.log?.ike_sas === 1 ? "" : "s"}.
+          Algorithms, authentication, lifetimes, rekeys and retransmits are what the daemon logged; message sizes, handshake timing, ESP sequencing and
+          handshake floods are not visible in a log, so the anomaly model is not applied. Only strongSwan logs are read.
+        </div>
+      )}
       {s.other_vpn?.length > 0 && (
         <div className="banner compact" role="note">
           <b>Other VPN traffic seen, not analysed:</b>{" "}
@@ -97,7 +104,7 @@ export default function Tunnels({ aid }: { aid: number }) {
             <li><b>{tunnels.length}</b> tunnels</li>
             <li><b>{withViol}</b> with violations</li>
             <li><b>{tunnels.length - withViol}</b> without violations</li>
-            <li>{scored === 0 ? <span className="muted">anomaly model not loaded</span> : <><b>{anomalous}</b> anomalous</>}</li>
+            <li>{scored === 0 ? <span className="muted">{s.source === "log" ? "anomaly model n/a for logs" : "anomaly model not loaded"}</span> : <><b>{anomalous}</b> anomalous</>}</li>
           </ul>
           <p className="key">
             {totalViol === 0 || !top ? (
@@ -111,7 +118,7 @@ export default function Tunnels({ aid }: { aid: number }) {
             )}
           </p>
           <p className="foot small muted">
-            {s.decrypted_tunnels ?? 0} decrypted · {totalViol} violation{totalViol === 1 ? "" : "s"} in total · {s.ike_messages} IKE messages · {s.esp_packets} ESP packets · analysed in {a.seconds}s
+            {s.source === "log" ? `${s.log?.charon_lines} log lines` : `${s.decrypted_tunnels ?? 0} decrypted`} · {totalViol} violation{totalViol === 1 ? "" : "s"} in total · {s.source === "log" ? "no packets" : `${s.ike_messages} IKE messages · ${s.esp_packets} ESP packets`} · analysed in {a.seconds}s
           </p>
         </div>
       </section>

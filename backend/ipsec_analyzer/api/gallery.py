@@ -10,10 +10,10 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-from ..pipeline import analyze
+from ..pipeline import analyze, analyze_log
 from ..rules.policy import SEV_ORDER
 
-# name -> (title, story, kind). Order here is the gallery order. `kind` groups cards: tour, weak, downgrade, baseline, real.
+# name -> (title, story, kind). Order here is the gallery order. `kind` groups cards: tour, weak, downgrade, baseline, real, log.
 CURATED: dict[str, tuple[str, str, str]] = {
     "demo_gateway_audit": ("Audit a whole gateway", "A simulated corporate VPN gateway with compliant, weak, downgraded and anomalous tunnels side by side. "
                            "The best first click: see the risk ranking, ATT&CK map and fix plan for a full estate.", "tour"),
@@ -32,10 +32,13 @@ CURATED: dict[str, tuple[str, str, str]] = {
     "ikev2-decrypt-3des-sha1_160.pcap": ("Third-party IKEv2 with 3DES", "From Wireshark's public sample set: a legacy 3DES and SHA-1 negotiation, decrypted with the published keys.", "real"),
     "ikev1-certs.pcap": ("Third-party IKEv1 with certificates", "From Wireshark's public sample set (IKEv1, certificate test capture). Its older proposals are flagged rule by rule.", "real"),
     "ikev1-bug-12610.pcapng": ("Third-party IKEv1 capture (bug 12610)", "From Wireshark's public sample set, kept as a regression capture for IKEv1 parsing.", "real"),
+    "strongswan_gateway.log": ("Audit a gateway from its strongSwan log", "No packet capture needed: the daemon's own log states every proposal it received and selected. "
+                               "Six IKE SAs (hand-written sample log): compliant, weak suite chosen, downgrade retry, aggressive-mode PSK, auth failure.", "log"),
+    "strongswan_initiator_filelog.log": ("An initiator's log: retransmits, then a clean tunnel", "A hand-written strongSwan initiator log in plain filelog format: three retransmits of the first message, then a compliant tunnel.", "log"),
     "ikev1-bug-12620.pcapng": ("Third-party IKEv1 capture (bug 12620)", "From Wireshark's public sample set, kept as a regression capture for IKEv1 parsing.", "real"),
 }
 ORDER = {n: i for i, n in enumerate(CURATED)}
-KIND_FALLBACK = {"synthetic": "tour", "real-lab": "tour", "real-public": "real"}
+KIND_FALLBACK = {"synthetic": "tour", "real-lab": "tour", "real-public": "real", "sample-log": "log"}
 
 _previews: dict[str, dict[str, Any]] = {}
 _lock = threading.Lock()
@@ -65,7 +68,8 @@ def warm_previews(samples: dict[str, dict[str, Any]], engine: Any, model: Any) -
             if name in _previews:
                 continue
         try:
-            res = analyze(Path(s["pcap"]), Path(s["keys"]) if s["keys"] else None, engine, model)
+            res = (analyze_log(Path(s["pcap"]), engine) if s.get("input") == "log"
+                   else analyze(Path(s["pcap"]), Path(s["keys"]) if s["keys"] else None, engine, model))
         except Exception:  # noqa: BLE001 - a bad sample must not stop the others or the API
             traceback.print_exc()
             continue

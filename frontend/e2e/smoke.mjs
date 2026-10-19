@@ -19,6 +19,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const KEY = process.env.API_KEY || "";
 const AUTH = KEY ? { "X-API-Key": KEY } : {};  // node-side requests; the browser signs in through the UI
 const PCAP = path.resolve(HERE, "../../data/captures/synthetic/demo_gateway_audit.pcap");
+const LOG = path.resolve(HERE, "../../data/logs/strongswan_gateway.log");
 
 function findBrowser() {
   const c = [process.env.CHROME_PATH,
@@ -30,7 +31,7 @@ function findBrowser() {
 }
 
 if (typeof WebSocket === "undefined") { console.error("Node >= 22 is required (global WebSocket)."); process.exit(2); }
-if (!existsSync(PCAP)) { console.error("Missing fixture " + PCAP); process.exit(2); }
+if (!existsSync(PCAP) || !existsSync(LOG)) { console.error("Missing fixture " + PCAP); process.exit(2); }
 const browser = findBrowser();
 if (!browser) { console.error("No Chrome/Chromium/Edge found. Set CHROME_PATH."); process.exit(2); }
 try { await fetch(BASE + "/api/health"); } catch { console.error(`App not reachable at ${BASE} (start the API and the UI first).`); process.exit(2); }
@@ -187,6 +188,26 @@ try {
   for (const a of await api("/api/analyses")) if (!before.includes(a.id)) created.push(a.id);
   check("the card's preview matches the analysis it opens", await run((c) => document.querySelector(".hero-score").textContent === c.score && document.querySelector(".kpis li b").textContent === c.tunnels, card0), JSON.stringify(card0));
   check("synthetic scenario results show the compact SYNTHETIC notice with its original wording", await run(() => { const b = document.querySelector(".banner.compact"); return !!b && b.textContent.includes("Simulated capture.") && b.textContent.includes("not a captured real-world incident") && document.querySelector("h1 .badge")?.textContent.toLowerCase().includes("synthetic (simulated)"); }));
+
+  // ---- 4b. strongSwan daemon log: upload through the UI, results come from the log, not from packets
+  await nav(BASE + "/#/");
+  check("Analyze page has the Live ingest section", await waitFor(() => !!document.querySelector(".az-live") && document.querySelector(".az-live h2")?.textContent === "Live ingest"));
+  const docL = await send("DOM.getDocument", { depth: 1 });
+  const inputL = await send("DOM.querySelector", { nodeId: docL.result.root.nodeId, selector: ".az-drop input[type=file]" });
+  await send("DOM.setFileInputFiles", { nodeId: inputL.result.nodeId, files: [LOG] });
+  check("a log file is accepted and the button says so", await waitFor(() => document.querySelector(".az-file")?.textContent === "strongswan_gateway.log" && document.querySelector(".az-go").textContent.startsWith("Analyze log")));
+  const beforeL = (await api("/api/analyses")).map((a) => a.id);
+  await run(() => document.querySelector(".az-go").click());
+  check("log upload opens the results page", await waitFor(() => /^#\/a\/\d+$/.test(location.hash) && !!document.querySelector(".res-summary .hero-score"), [], 40000), await hash());
+  for (const a of await api("/api/analyses")) if (!beforeL.includes(a.id)) created.push(a.id);
+  const aidL = Number((await hash()).split("/")[2]);
+  const TL = await api(`/api/analyses/${aidL}/tunnels`);
+  check("log results say they come from a daemon log", await run(() => [...document.querySelectorAll(".banner.compact")].some((b) => b.textContent.includes("Assessed from a daemon log, not from packets"))));
+  check("log results list one tunnel per IKE SA, as the API does", await run((n) => document.querySelectorAll("tbody tr.click").length === n, TL.length) && TL.length === 6, `${TL.length} tunnels`);
+  check("log risk matches the API", (await run(() => document.querySelector(".hero-score").textContent)) === String(Math.max(...TL.map((t) => t.risk.score))));
+  await run(() => document.querySelector("tbody tr.click").click());
+  check("a log-derived tunnel opens without a timeline", await waitFor(() => [...document.querySelectorAll("h2")].some((h) => h.textContent.startsWith("Rule-engine findings"))));
+  check("its coverage note explains the log source", await run(() => document.body.innerText.includes("Assessed from a daemon log, not from packets")));
 
   // ---- 5. Evaluation page: every number comes from /api/metrics
   const M = await api("/api/metrics");

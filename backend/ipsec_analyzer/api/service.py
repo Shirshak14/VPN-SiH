@@ -7,8 +7,10 @@ import traceback
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import delete
+
 from ..ml.model import DEFAULT_MODEL, AnomalyModel
-from ..pipeline import AnalysisResult, TunnelResult, analyze
+from ..pipeline import AnalysisResult, TunnelResult, analyze, analyze_log
 from ..rules import RuleEngine
 from .db import DATA_DIR, Analysis, SessionLocal, TunnelRow
 
@@ -69,19 +71,24 @@ def summarize(res: AnalysisResult) -> dict[str, Any]:
         "policy": res.policy_name, "anomaly_model": get_model() is not None,
         "decrypted_tunnels": sum(1 for r in res.tunnels if r.tunnel.decrypted),
         "other_vpn": st.other_vpn, "parse_errors": st.errors[:10], "duration_s": round(st.last_ts - st.first_ts, 2),
+        "source": "log" if res.log is not None else "capture", "log": res.log,
     }
 
 
 _SLOTS = threading.BoundedSemaphore(max(1, int(os.environ.get("MAX_CONCURRENT_ANALYSES", "2"))))
 
 
-def run_analysis(analysis_id: int, pcap: Path, keys: Path | None) -> None:
-    """Executed in a worker thread; at most MAX_CONCURRENT_ANALYSES run at once (the rest stay "queued")."""
+def run_analysis(analysis_id: int, pcap: Path, keys: Path | None, kind: str = "pcap") -> None:
+    """Executed in a worker thread; at most MAX_CONCURRENT_ANALYSES run at once (the rest stay "queued").
+
+    `kind` is "pcap" (a capture) or "log" (a strongSwan daemon log). Re-running an analysis id replaces its tunnels,
+    which is how a watched file that changed is refreshed in place.
+    """
     with _SLOTS:
-        _run_analysis(analysis_id, pcap, keys)
+        _run_analysis(analysis_id, pcap, keys, kind)
 
 
-def _run_analysis(analysis_id: int, pcap: Path, keys: Path | None) -> None:
+def _run_analysis(analysis_id: int, pcap: Path, keys: Path | None, kind: str = "pcap") -> None:
     """Updates stage/status so the UI can show progress."""
     def stage(name: str) -> None:
         with SessionLocal() as s:
@@ -90,9 +97,11 @@ def _run_analysis(analysis_id: int, pcap: Path, keys: Path | None) -> None:
             s.commit()
 
     try:
-        res = analyze(pcap, keys, get_engine(), get_model(), progress=stage)
+        res = analyze_log(pcap, get_engine(), progress=stage) if kind == "log" else analyze(pcap, keys, get_engine(), get_model(), progress=stage)
         with SessionLocal() as s:
             a = s.get(Analysis, analysis_id)
+            s.execute(delete(TunnelRow).where(TunnelRow.analysis_id == analysis_id))
+            a.error = None
             a.summary, a.seconds, a.status, a.stage = summarize(res), round(res.seconds, 3), "done", "done"
             for r in res.tunnels:
                 s.add(TunnelRow(analysis_id=analysis_id, tunnel_id=r.tunnel.id, risk=r.risk.score, band=r.risk.band,

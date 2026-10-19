@@ -15,6 +15,7 @@ COPY backend/ /app/backend/
 COPY docs/ /app/docs/
 COPY data/public/ /app/data/public/
 COPY data/captures/lab/ /app/data/captures/lab/
+COPY data/logs/ /app/data/logs/
 ENV DATA_DIR=/app/data PYTHONWARNINGS=ignore UI_DIR=/app/ui
 # Regenerate the simulated corpus and train the anomaly baseline at build time (deterministic seeds).
 RUN python -m synth.generate --out /app/data/captures --benign-per-family 40 \
