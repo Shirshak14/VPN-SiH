@@ -66,7 +66,7 @@ export const api = {
     return req<Analysis>("/api/analyses", { method: "POST", body: f });
   },
   remove: (id: number) => req<void>(`/api/analyses/${id}`, { method: "DELETE" }),
-  url: (id: number, what: "report.pdf" | "export.json" | "export.syslog") => `/api/analyses/${id}/${what}`,
+  url: (id: number, what: "report.pdf" | "report.html" | "report.html?download=1" | "export.json" | "export.syslog") => `/api/analyses/${id}/${what}`,
 };
 
 export const fmtTs = (t: number, t0: number) => `+${(t - t0).toFixed(3)}s`;

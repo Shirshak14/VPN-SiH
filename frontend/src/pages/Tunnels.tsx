@@ -23,6 +23,7 @@ export default function Tunnels({ aid }: { aid: number }) {
   const [plan, setPlan] = useState<Json[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [copied, setCopied] = useState(false);
 
   const load = () => {
     setError(null);
@@ -31,6 +32,12 @@ export default function Tunnels({ aid }: { aid: number }) {
       .catch((e) => setError(e.message));
   };
   useEffect(load, [aid]);
+  const copyLink = () => {
+    const url = new URL(api.url(aid, "report.html"), window.location.origin).href;
+    const done = () => { setCopied(true); window.setTimeout(() => setCopied(false), 2000); };
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url).then(done, () => window.prompt("Copy this link", url));
+    else window.prompt("Copy this link", url);
+  };
 
   if (error) return <ErrorBox error={error} retry={load} />;
   if (!a || !tunnels) return <Loading what="Loading results" />;
@@ -55,7 +62,10 @@ export default function Tunnels({ aid }: { aid: number }) {
           <span>Policy: {s.policy}{a.has_keys ? " · decryption keys supplied" : " · no decryption keys"}</span>
         </div>
         <div className="res-actions" aria-label="Report actions">
-          <a className="btn sm primary" href={api.url(aid, "report.pdf")}>Download PDF report</a>
+          <a className="btn sm primary" href={api.url(aid, "report.html")} target="_blank" rel="noreferrer" title="Opens a self-contained report in a new tab; use Print to save it as PDF">Open printable report</a>
+          <a className="btn sm" href={api.url(aid, "report.pdf")}>Download PDF</a>
+          <a className="btn sm" href={api.url(aid, "report.html?download=1")} title="One HTML file with no external resources: email it or archive it">Download HTML</a>
+          <button className="btn sm" type="button" onClick={copyLink}>{copied ? "Link copied" : "Copy report link"}</button>
           <a className="btn sm" href={api.url(aid, "export.json")}>JSON</a>
           <a className="btn sm" href={api.url(aid, "export.syslog")}>Syslog / CEF</a>
           <a className="btn sm" href={`#/policy/${aid}`}>Policy rules checked</a>

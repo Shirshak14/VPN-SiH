@@ -13,8 +13,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..reports.export import to_json, to_syslog
+from ..reports.html import build_html
 from ..reports.pdf import build_pdf
-from ..rules.policy import SEV_ORDER
+from ..reports.summary import remediation_plan
 from ..scoring import FORMULA
 from . import auth, service
 from .compare import compare
@@ -234,18 +235,7 @@ def get_tunnel(aid: int, tid: str, s: Session = Depends(db)) -> dict[str, Any]:
 def remediation(aid: int, s: Session = Depends(db)) -> list[dict[str, Any]]:
     """Consolidated remediation plan: each remediation once, with the rules/tunnels that need it."""
     _done(s, aid)
-    plan: dict[str, dict[str, Any]] = {}
-    for p in _tunnels(s, aid):
-        for f in p["findings"]:
-            if f["category"] != "violation":
-                continue
-            r = plan.setdefault(f["remediation"]["id"], {**f["remediation"], "rules": set(), "tunnels": set(), "severity": f["severity"]})
-            r["rules"].add(f["rule_id"])
-            r["tunnels"].add(p["tunnel"]["id"])
-            if SEV_ORDER[f["severity"]] < SEV_ORDER[r["severity"]]:
-                r["severity"] = f["severity"]
-    return sorted(({**v, "rules": sorted(v["rules"]), "tunnels": sorted(v["tunnels"])} for v in plan.values()),
-                  key=lambda v: SEV_ORDER[v["severity"]])
+    return remediation_plan(_tunnels(s, aid))
 
 
 @app.get("/api/analyses/{aid}/report.pdf")
@@ -253,6 +243,15 @@ def report_pdf(aid: int, s: Session = Depends(db)) -> Response:
     a = _done(s, aid)
     pdf = build_pdf(_analysis_dict(a), _tunnels(s, aid))
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="ipsec-report-{aid}.pdf"'})
+
+
+@app.get("/api/analyses/{aid}/report.html")
+def report_html(aid: int, download: bool = False, s: Session = Depends(db)) -> Response:
+    """Self-contained printable report. Opens in the browser by default; ?download=1 saves it as a file to share."""
+    a = _done(s, aid)
+    headers = {"Content-Disposition": f'attachment; filename="ipsec-report-{aid}.html"'} if download else {}
+    headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'"
+    return Response(build_html(_analysis_dict(a), _tunnels(s, aid)), media_type="text/html; charset=utf-8", headers=headers)
 
 
 @app.get("/api/analyses/{aid}/export.json")

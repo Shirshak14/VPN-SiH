@@ -5,7 +5,7 @@ Smart India Hackathon 2026 · PS SIH26160 · working prototype.
 Upload a PCAP containing IKEv1/IKEv2 negotiation and ESP/AH traffic. The tool parses the handshakes, rebuilds each tunnel's
 Security Association lifecycle, checks it against a YAML policy pack (NIST SP 800-77r1 / RFC 8221 / RFC 8247), scores behavioural
 anomalies with an Isolation Forest, combines both into a 0–100 risk score, explains it (SHAP + MITRE ATT&CK), and produces remediation
-guidance, an audit PDF, and JSON/syslog(CEF) exports.
+guidance, an audit PDF, a self-contained printable HTML report, and JSON/syslog(CEF) exports.
 
 ```
 PCAP → IKE & ESP parsing → SA reconstruction → Rules + AI detection → Risk score & MITRE mapping → Remediation report
@@ -131,7 +131,7 @@ Behavioural families (all simulator-only, designed by us): oversize handshakes 6
 ## API
 
 `POST /api/analyses` (multipart `pcap`, optional `keys`) · `POST /api/samples/{name}/analyze` · `GET /api/analyses/{id}` (status + stage) ·
-`…/tunnels` · `…/tunnels/{tid}` (SA detail, findings, risk, SHAP) · `…/remediation` · `…/report.pdf` · `…/export.json` · `…/export.syslog` ·
+`…/tunnels` · `…/tunnels/{tid}` (SA detail, findings, risk, SHAP) · `…/remediation` · `…/report.pdf` · `…/report.html` (self-contained, printable; `?download=1` saves it) · `…/export.json` · `…/export.syslog` ·
 `GET /api/compare?before={id}&after={id}` (risk change, rules fixed/new/remaining, tunnels matched by peer pair) ·
 `GET /api/metrics` · `GET /api/policy` (rules with description, sources, ATT&CK and fix; algorithm tiers; risk formula) · `GET /api/health`. Interactive docs at `/docs`.
 
