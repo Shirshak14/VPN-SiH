@@ -33,7 +33,7 @@ export interface Sample {
   kind: string;
   order: number;
   preview: SamplePreview | null;
-  input?: "pcap" | "log";
+  input?: "pcap" | "log" | "config";
 }
 
 export interface AuthState {
@@ -85,6 +85,11 @@ export const api = {
     f.append("log", log);
     return req<Analysis>("/api/logs", { method: "POST", body: f });
   },
+  uploadConfig: (config: File) => {
+    const f = new FormData();
+    f.append("config", config);
+    return req<Analysis>("/api/configs", { method: "POST", body: f });
+  },
   ingest: () => req<Json>("/api/ingest/status"),
   remove: (id: number) => req<void>(`/api/analyses/${id}`, { method: "DELETE" }),
   url: (id: number, what: "report.pdf" | "report.html" | "report.html?download=1" | "export.json" | "export.syslog") => `/api/analyses/${id}/${what}`,
@@ -93,5 +98,6 @@ export const api = {
 export const fmtTs = (t: number, t0: number) => `+${(t - t0).toFixed(3)}s`;
 export const pct = (v: number | null | undefined) => (v == null ? "n/a" : `${(v * 100).toFixed(1)}%`);
 
-/** Packet captures go to /api/analyses; anything else is treated as a strongSwan daemon log. */
+/** Packet captures go to /api/analyses, OpenVPN/WireGuard configuration files to /api/configs, anything else is treated as a strongSwan daemon log. */
 export const isCapture = (name: string) => /\.(pcap|pcapng|cap)$/i.test(name);
+export const isConfig = (name: string) => /\.(ovpn|conf)$/i.test(name);

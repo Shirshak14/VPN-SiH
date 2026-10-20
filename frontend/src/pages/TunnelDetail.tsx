@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Json, api, fmtTs } from "../api";
 import { Empty, ErrorBox, Loading, Meter, Sev } from "../ui";
+import VpnFacts from "./VpnFacts";
 
 const SEVS = ["critical", "high", "medium", "low", "info"];
 
-function Timeline({ events }: { events: Json[] }) {
+function Timeline({ events, noun = "IKE messages" }: { events: Json[]; noun?: string }) {
   const [shown, setShown] = useState(events.length);
   const timer = useRef<number | null>(null);
   useEffect(() => () => { if (timer.current) window.clearInterval(timer.current); }, []);
@@ -22,7 +23,7 @@ function Timeline({ events }: { events: Json[] }) {
   return (
     <div>
       <div className="row spread">
-        <span className="small muted">{events.length} IKE messages · times relative to first packet</span>
+        <span className="small muted">{events.length} {noun} · times relative to first packet</span>
         <button onClick={replay} aria-label="Replay handshake capture">▶ Replay capture</button>
       </div>
       <ol className="timeline" aria-live="polite">
@@ -71,6 +72,7 @@ export default function TunnelDetail({ aid, tid }: { aid: number; tid: string })
   if (error) return <ErrorBox error={error} retry={load} />;
   if (!d) return <Loading what="Loading tunnel" />;
   const t = d.tunnel, risk = d.risk, an = d.anomaly;
+  const isVpn = !!t.vpn;
   const viol = d.findings.filter((f: Json) => f.category === "violation");
   const cov = d.findings.filter((f: Json) => f.category === "coverage");
 
@@ -81,7 +83,7 @@ export default function TunnelDetail({ aid, tid }: { aid: number; tid: string })
         <div className="row spread">
           <div>
             <h1 className="mono">{t.initiator} → {t.responder}</h1>
-            <div className="muted small">{t.exchange_mode} · status <b>{t.status}</b>{t.failure ? ` (${t.failure})` : ""} · SPI <span className="mono">{t.ispi}</span></div>
+            <div className="muted small">{t.exchange_mode} · status <b>{t.status}</b>{t.failure ? ` (${t.failure})` : ""} · {isVpn ? (t.source === "config" ? "file" : "session") : "SPI"} <span className="mono">{t.ispi}</span></div>
           </div>
           <div style={{ minWidth: 220 }}>
             <div className="row" style={{ gap: "var(--sp-3)" }}><span className="big">{risk.score}</span><Sev level={risk.band} /></div>
@@ -98,34 +100,46 @@ export default function TunnelDetail({ aid, tid }: { aid: number; tid: string })
         </div>
       </div>
 
-      <div className="grid g2">
-        <div className="card">
-          <h2>Security Association</h2>
-          <dl className="kv">
-            <dt>Negotiated IKE</dt><dd className="mono">{t.chosen?.label ?? "—"}</dd>
-            <dt>Offered</dt><dd className="mono">{t.offered.length ? t.offered.map((s: Json) => s.label).join("  |  ") : "—"}</dd>
-            <dt>Authentication</dt><dd>{t.auth_observable ? t.auth_method : <span className="muted">not observable (encrypted; supply keys)</span>}</dd>
-            <dt>NAT-T</dt><dd>{t.natt ? "yes (UDP/4500)" : "no"}</dd>
-            <dt>IKE lifetime</dt><dd>{t.chosen?.lifetime_s ? `${t.chosen.lifetime_s} s` : <span className="muted">not on the wire (IKEv2)</span>}</dd>
-            <dt>Rekeys</dt><dd>{t.create_child_exchanges} CREATE_CHILD_SA / Quick Mode{t.decrypted ? ` (${t.child_rekeys} child, ${t.ike_rekeys} IKE)` : ""}</dd>
-            <dt>Retransmits</dt><dd>{t.retransmits} (longest streak {t.max_retransmit_streak}) · cookies {t.cookie_challenges}</dd>
-            <dt>DPD / liveness</dt><dd>{t.dpd_messages} messages</dd>
-            <dt>Fragments</dt><dd>{t.fragments}</dd>
-            <dt>Capabilities</dt><dd>{t.vendor_capabilities.map((c: string) => <span key={c} className="chip">{c}</span>)}</dd>
-          </dl>
-          <h3>Child SAs</h3>
-          {t.child_sas.length === 0 ? <div className="small muted">None visible{t.ike_version === 2 && !t.decrypted ? " — IKE_AUTH is encrypted; upload the key file to reveal ESP algorithms and PFS." : "."}</div> : (
-            <div className="tablewrap"><table><thead><tr><th>Proto</th><th>Suite</th><th>Via</th><th>PFS</th></tr></thead><tbody>
-              {t.child_sas.map((c: Json, i: number) => (
-                <tr key={i}><td>{c.protocol}</td><td className="mono">{c.suite.label}</td><td>{c.via}{c.rekey ? " (rekey)" : ""}</td><td>{c.via === "CREATE_CHILD_SA" ? (c.pfs ? "yes" : <b>no</b>) : <span className="muted">n/a (initial)</span>}</td></tr>
-              ))}</tbody></table></div>
+      {isVpn ? (
+        <div className={t.source === "config" ? "stack" : "grid g2"}>
+          <VpnFacts t={t} />
+          {t.source !== "config" && (
+            <div className="card">
+              <h2>Session timeline</h2>
+              {t.timeline.length === 0 ? <Empty>No packets.</Empty> : <Timeline events={t.timeline} noun="events" />}
+            </div>
           )}
         </div>
-        <div className="card">
-          <h2>Handshake timeline</h2>
-          {t.timeline.length === 0 ? <Empty>No IKE messages.</Empty> : <Timeline events={t.timeline} />}
+      ) : (
+      <div className="grid g2">
+          <div className="card">
+            <h2>Security Association</h2>
+            <dl className="kv">
+              <dt>Negotiated IKE</dt><dd className="mono">{t.chosen?.label ?? "—"}</dd>
+              <dt>Offered</dt><dd className="mono">{t.offered.length ? t.offered.map((s: Json) => s.label).join("  |  ") : "—"}</dd>
+              <dt>Authentication</dt><dd>{t.auth_observable ? t.auth_method : <span className="muted">not observable (encrypted; supply keys)</span>}</dd>
+              <dt>NAT-T</dt><dd>{t.natt ? "yes (UDP/4500)" : "no"}</dd>
+              <dt>IKE lifetime</dt><dd>{t.chosen?.lifetime_s ? `${t.chosen.lifetime_s} s` : <span className="muted">not on the wire (IKEv2)</span>}</dd>
+              <dt>Rekeys</dt><dd>{t.create_child_exchanges} CREATE_CHILD_SA / Quick Mode{t.decrypted ? ` (${t.child_rekeys} child, ${t.ike_rekeys} IKE)` : ""}</dd>
+              <dt>Retransmits</dt><dd>{t.retransmits} (longest streak {t.max_retransmit_streak}) · cookies {t.cookie_challenges}</dd>
+              <dt>DPD / liveness</dt><dd>{t.dpd_messages} messages</dd>
+              <dt>Fragments</dt><dd>{t.fragments}</dd>
+              <dt>Capabilities</dt><dd>{t.vendor_capabilities.map((c: string) => <span key={c} className="chip">{c}</span>)}</dd>
+            </dl>
+            <h3>Child SAs</h3>
+            {t.child_sas.length === 0 ? <div className="small muted">None visible{t.ike_version === 2 && !t.decrypted ? " — IKE_AUTH is encrypted; upload the key file to reveal ESP algorithms and PFS." : "."}</div> : (
+              <div className="tablewrap"><table><thead><tr><th>Proto</th><th>Suite</th><th>Via</th><th>PFS</th></tr></thead><tbody>
+                {t.child_sas.map((c: Json, i: number) => (
+                  <tr key={i}><td>{c.protocol}</td><td className="mono">{c.suite.label}</td><td>{c.via}{c.rekey ? " (rekey)" : ""}</td><td>{c.via === "CREATE_CHILD_SA" ? (c.pfs ? "yes" : <b>no</b>) : <span className="muted">n/a (initial)</span>}</td></tr>
+                ))}</tbody></table></div>
+            )}
+          </div>
+          <div className="card">
+            <h2>Handshake timeline</h2>
+            {t.timeline.length === 0 ? <Empty>No IKE messages.</Empty> : <Timeline events={t.timeline} />}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="card">
         <h2>Rule-engine findings ({viol.length})</h2>
@@ -159,12 +173,14 @@ export default function TunnelDetail({ aid, tid }: { aid: number; tid: string })
         )}
         {cov.length > 0 && (
           <>
-            <h3>Not assessable from this capture</h3>
+            <h3>Not assessable from this {t.source === "config" ? "file" : "capture"}</h3>
             {cov.map((f: Json) => <div key={f.rule_id} className="banner small" style={{ marginBottom: "var(--sp-2)" }}><b>{f.title}.</b> {f.description}</div>)}
           </>
         )}
       </div>
 
+      {!isVpn && (
+        <>
       <div className="card">
         <h2>Behavioural anomaly model</h2>
         {!an ? <Empty>The anomaly model is not trained on this server. Run <code>python -m ipsec_analyzer.ml.train</code>.</Empty> : (
@@ -199,6 +215,8 @@ export default function TunnelDetail({ aid, tid }: { aid: number; tid: string })
             ))}</tbody></table></div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }

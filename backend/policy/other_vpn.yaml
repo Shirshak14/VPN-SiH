@@ -1,0 +1,631 @@
+# Policy pack for OpenVPN and WireGuard -- the counterpart of nist_rfc8221.yaml for the two non-IPsec VPNs.
+#
+# Severity weights, risk bands and the anomaly weight are NOT repeated here: the IPsec pack's values are used, so a
+# "high" finding contributes the same to a tunnel's score whichever protocol it came from.
+#
+# Each rule names a `check` (a function in ipsec_analyzer/vpn/rules.py), the severity per outcome, the sources that
+# justify it, and a remediation. `source` says where the evidence can come from: a packet capture, a configuration
+# file, or both. Rules never guess: if a fact is not observable the rule stays silent and the analyzer reports a
+# coverage note instead (see COV-* in rules.py).
+policy:
+  name: "OpenVPN / WireGuard hardening"
+  version: "1.0"
+
+thresholds:
+  wg_unanswered_min: 3          # initiations with no response at all before WG-NO-RESPONSE
+  wg_burst_10s: 6               # initiations inside any 10 s window (an honest peer retries every 5 s)
+  wg_stale_key_s: 185           # REJECT_AFTER_TIME (180 s) plus capture-timing slack
+  wg_replay_min: 5              # duplicated transport counters before WG-REPLAY
+  wg_replay_ratio: 0.01
+  ovpn_single_key_s: 7200       # one data-channel key in use for this long (default reneg-sec is 3600)
+  dh_min_bits: 2048
+  rsa_min_bits: 2048
+
+rules:
+  # ------------------------------------------------------------------ OpenVPN, from a capture
+  - id: OVPN-TLS-LEGACY
+    title: OpenVPN control channel negotiated a deprecated TLS version
+    check: ovpn_tls_version
+    protocol: openvpn
+    source: capture
+    severity_by_key: {SSLv3: critical, TLSv1: high, TLSv1.1: high}
+    description: >-
+      The server selected TLS 1.0, TLS 1.1 or SSLv3 for the OpenVPN control channel, which carries the key exchange
+      and authentication of the VPN. Those versions are formally deprecated (RFC 8996) and have practical attacks
+      (BEAST, POODLE, weak PRF/MAC constructions); they also lack the AEAD suites and downgrade protection of TLS 1.2/1.3.
+    refs: ["RFC 8996", "RFC 9325 §3.1.1", "NIST SP 800-52 Rev. 2 §3.1"]
+    mitre: [T1600, T1040]
+    remediation: REM-OVPN-TLS-MIN
+
+  - id: OVPN-TLS-SUITE-WEAK
+    title: OpenVPN control channel uses a broken or obsolete TLS cipher suite
+    check: ovpn_suite_issue
+    protocol: openvpn
+    source: capture
+    severity_by_key: {null_cipher: critical, export: critical, anon: critical, rc4: critical, des: critical, 3des: high, md5: high}
+    description: >-
+      The negotiated TLS suite has no encryption, export-grade or anonymous key exchange, RC4, single DES, a 64-bit block
+      cipher (3DES, SWEET32) or an MD5-based MAC. Any of these lets a network observer read or alter the TLS
+      handshake that protects the VPN keys.
+    refs: ["RFC 7465 (RC4)", "RFC 9325 §4.1", "CVE-2016-2183 (SWEET32)", "NIST SP 800-52 Rev. 2 §3.3"]
+    mitre: [T1600, T1040]
+    remediation: REM-OVPN-TLS-SUITE
+
+  - id: OVPN-TLS-NO-PFS
+    title: OpenVPN TLS key exchange without forward secrecy
+    check: ovpn_no_pfs
+    protocol: openvpn
+    source: capture
+    severity: high
+    description: >-
+      The negotiated suite uses static RSA (or static DH/ECDH) key exchange. Whoever later obtains the server's private
+      key can decrypt every recorded handshake and recover the session keys of the whole recorded VPN traffic.
+    refs: ["RFC 9325 §4.1", "NIST SP 800-52 Rev. 2 §3.3.1"]
+    mitre: [T1040]
+    remediation: REM-OVPN-TLS-SUITE
+
+  - id: OVPN-TLS-CBC
+    title: OpenVPN TLS records protected by CBC with HMAC-SHA-1
+    check: ovpn_cbc_sha1
+    protocol: openvpn
+    source: capture
+    severity: low
+    description: >-
+      A CBC-mode suite with SHA-1 MAC is negotiated. It is not broken for the control channel's short exchange, but it is
+      the legacy construction behind the padding-oracle family (Lucky13 and relatives); AEAD suites (AES-GCM, ChaCha20-Poly1305) avoid it.
+    refs: ["RFC 9325 §4.2", "NIST SP 800-52 Rev. 2 §3.3.1"]
+    mitre: []
+    remediation: REM-OVPN-TLS-SUITE
+
+  - id: OVPN-DHE-WEAK
+    title: OpenVPN TLS uses a small finite-field Diffie-Hellman group
+    check: ovpn_dh_size
+    protocol: openvpn
+    source: capture
+    severity_by_key: {under_1024: high, under_2048: medium}
+    description: >-
+      The server's ServerKeyExchange carries a Diffie-Hellman prime below 2048 bits. Groups of 1024 bits or less are within
+      reach of well-resourced attackers who precompute for a few popular primes (Logjam). Use elliptic-curve groups or
+      the RFC 7919 ffdhe groups of at least 2048 bits.
+    refs: ["Logjam (weakdh.org)", "RFC 7919", "NIST SP 800-57 Part 1 Rev. 5 Table 2"]
+    mitre: [T1040, T1557]
+    remediation: REM-OVPN-DH
+
+  - id: OVPN-CERT-WEAK
+    title: OpenVPN server certificate is weak or out of date
+    check: ovpn_cert
+    protocol: openvpn
+    source: capture
+    severity_by_key: {rsa_under_1024: critical, rsa_under_2048: high, md5_signature: high, sha1_signature: medium, expired: medium}
+    description: >-
+      The server certificate, visible in clear text before TLS 1.3, has an RSA key below 2048 bits, an MD5 or SHA-1
+      signature, or was outside its validity period when the capture was taken. A forged or stolen weak certificate lets an
+      attacker impersonate the VPN server to clients that do not pin it.
+    refs: ["NIST SP 800-131A Rev. 2", "NIST SP 800-57 Part 1 Rev. 5 Table 2", "RFC 5280 §4.1.2.5"]
+    mitre: [T1557]
+    remediation: REM-OVPN-CERT
+
+  - id: OVPN-OFFERS-LEGACY
+    title: OpenVPN client still offers obsolete TLS versions or suites
+    check: ovpn_client_offers
+    protocol: openvpn
+    source: capture
+    severity: low
+    description: >-
+      The client's ClientHello advertises TLS 1.1 or older, or NULL / export / RC4 / DES / 3DES / MD5 suites. Even when the
+      server picks something safe, an on-path attacker who can interfere with the exchange (or a misconfigured server)
+      is only one step from a bad outcome. A client should not offer what it would not accept.
+    refs: ["RFC 8996", "RFC 9325 §3.1.1", "OpenVPN 2.6 manual: --tls-version-min, --tls-cipher"]
+    mitre: [T1600]
+    remediation: REM-OVPN-TLS-MIN
+
+  - id: OVPN-CTRL-UNPROTECTED
+    title: OpenVPN control channel has no tls-crypt or tls-auth
+    check: ovpn_ctrl
+    protocol: openvpn
+    source: capture
+    severity_by_key: {none: medium, tls-auth: low}
+    description: >-
+      Without tls-crypt the server's TLS stack is reachable by anyone who can send a UDP packet, so scanners and
+      unauthenticated attackers can fingerprint it, exhaust it and probe it for vulnerabilities; the full TLS handshake
+      (including certificates before TLS 1.3) is visible to observers. tls-auth only adds an HMAC (authentication)
+      and leaves the handshake readable; tls-crypt also encrypts the control channel.
+    refs: ["OpenVPN 2.6 manual: --tls-crypt, --tls-auth", "OpenVPN community wiki: Hardening OpenVPN Security"]
+    mitre: [T1595, T1499, T1040]
+    remediation: REM-OVPN-TLS-CRYPT
+
+  - id: OVPN-NO-REPLY
+    title: OpenVPN handshake not answered
+    check: ovpn_no_reply
+    protocol: openvpn
+    source: capture
+    severity: low
+    description: >-
+      The client sent hard resets and the server never replied. The server may be down or firewalled, or (with
+      tls-auth / tls-crypt) the two sides use different keys: OpenVPN drops packets that fail the HMAC silently, so a key mismatch looks
+      exactly like an unreachable server from the wire. Repeated unanswered attempts also show up when a scanner probes the port.
+    refs: ["OpenVPN 2.6 manual: --tls-auth", "OpenVPN 2.6 manual: --connect-retry"]
+    mitre: [T1595]
+    remediation: REM-OVPN-REACH
+
+  - id: OVPN-TLS-ALERT
+    title: OpenVPN TLS handshake aborted with a fatal alert
+    check: ovpn_alert
+    protocol: openvpn
+    source: capture
+    severity: low
+    description: >-
+      A plaintext fatal TLS alert ended the handshake (for example protocol_version or handshake_failure when the client
+      and server share no TLS version or suite). It is the wire evidence of a configuration mismatch or of a peer being refused.
+    refs: ["RFC 8446 §6", "RFC 5246 §7.2"]
+    mitre: []
+    remediation: REM-OVPN-REACH
+
+  - id: OVPN-STALLED
+    title: OpenVPN handshake answered but no tunnel traffic followed
+    check: ovpn_stalled
+    protocol: openvpn
+    source: capture
+    severity: low
+    description: >-
+      The server replied to the reset but no data-channel packet was seen in both directions. Either the capture ended
+      mid-handshake, or authentication, certificate verification or option negotiation failed inside the (encrypted) TLS session.
+    refs: ["OpenVPN 2.6 manual: --verb (client and server logs show the reason)"]
+    mitre: []
+    remediation: REM-OVPN-REACH
+
+  - id: OVPN-NO-RENEG
+    title: OpenVPN data-channel key not renegotiated for a long time
+    check: ovpn_no_reneg
+    protocol: openvpn
+    source: capture
+    severity: low
+    description: >-
+      One data-channel key has carried traffic for much longer than the default renegotiation interval (--reneg-sec 3600).
+      Long-lived keys increase the data protected by a single compromise and, for 64-bit block ciphers, the
+      chance of collisions. Check that --reneg-sec has not been disabled.
+    refs: ["OpenVPN 2.6 manual: --reneg-sec", "CVE-2016-2183 (SWEET32)"]
+    mitre: []
+    remediation: REM-OVPN-RENEG
+
+  # ------------------------------------------------------------------ WireGuard, from a capture
+  - id: WG-NO-RESPONSE
+    title: WireGuard handshake initiations never answered
+    check: wg_no_response
+    protocol: wireguard
+    source: capture
+    severity: low
+    description: >-
+      Several handshake initiations were sent and none got a response. WireGuard stays silent to anything it cannot
+      authenticate, so an unreachable peer, a wrong public key, a firewall or a scanner all look the same on the wire.
+    refs: ["WireGuard whitepaper §5.1 (silence towards unauthenticated peers)", "WireGuard whitepaper §6 (timers, REKEY_TIMEOUT)"]
+    mitre: [T1595]
+    remediation: REM-WG-REACH
+
+  - id: WG-INIT-FLOOD
+    title: WireGuard initiations faster than any honest peer retries
+    check: wg_init_burst
+    protocol: wireguard
+    source: capture
+    severity: medium
+    description: >-
+      An honest initiator retries every REKEY_TIMEOUT (5 s). Many initiations inside ten seconds are a handshake
+      flood, a misbehaving implementation, or an attacker trying to make the responder spend CPU on Curve25519 operations.
+    refs: ["WireGuard whitepaper §5.3 (DoS mitigation)", "WireGuard whitepaper §6 (timers)"]
+    mitre: [T1499]
+    remediation: REM-WG-REACH
+
+  - id: WG-STALE-KEYS
+    title: WireGuard transport keys used past the protocol's lifetime
+    check: wg_stale_keys
+    protocol: wireguard
+    source: capture
+    severity: medium
+    description: >-
+      A WireGuard keypair carried data for longer than REJECT_AFTER_TIME (180 s) without being replaced. A conforming
+      implementation refuses such keys, so this means a non-conforming peer, a capture-clock problem, or keys that are not being rotated.
+    refs: ["WireGuard whitepaper §6 (REKEY_AFTER_TIME 120 s, REJECT_AFTER_TIME 180 s)"]
+    mitre: []
+    remediation: REM-WG-REACH
+
+  - id: WG-REPLAY
+    title: WireGuard transport counters repeated
+    check: wg_replay
+    protocol: wireguard
+    source: capture
+    severity: high
+    description: >-
+      The same transport counter appears more than once on one keypair and direction. WireGuard drops replays, so these
+      packets would be rejected, but their presence shows that someone is replaying captured traffic. (A capture taken
+      on several interfaces at once, such as tcpdump -i any, also duplicates packets: check the capture point.)
+    refs: ["WireGuard whitepaper §5.4.6 (replay window)"]
+    mitre: [T1557]
+    remediation: REM-WG-REACH
+
+  - id: WG-COOKIE-LOAD
+    title: WireGuard responder is answering with cookie replies
+    check: wg_cookie
+    protocol: wireguard
+    source: capture
+    severity: low
+    description: >-
+      Cookie replies mean the responder considers itself under load and demands proof that the sender owns its IP
+      address before spending more work. It is the protocol working as designed, and also a signal of an ongoing flood.
+    refs: ["WireGuard whitepaper §5.3 and §5.4.7 (cookie replies)"]
+    mitre: [T1499]
+    remediation: REM-WG-REACH
+
+  - id: WG-ENDPOINT-CHANGE
+    title: WireGuard peer appeared from a different address
+    check: wg_roaming
+    protocol: wireguard
+    source: capture
+    severity: info
+    description: >-
+      Authenticated packets for a session came from an address other than the handshake's. That is WireGuard roaming
+      (a phone changing network) and normal, but it is worth knowing when the peer should be a fixed site.
+    refs: ["WireGuard whitepaper §2.2 (built-in roaming)"]
+    mitre: []
+    remediation: REM-WG-REACH
+
+  # ------------------------------------------------------------------ WireGuard, any source
+  - id: WG-NOT-FIPS
+    title: WireGuard uses primitives outside NIST-approved sets
+    check: wg_any
+    protocol: wireguard
+    source: any
+    severity: info
+    description: >-
+      The suite is fixed by the protocol: ChaCha20-Poly1305 and BLAKE2s are not FIPS-approved algorithms (Curve25519 is
+      standardised in NIST SP 800-186 but WireGuard's overall construction is not FIPS-validated). Irrelevant for most deployments,
+      a blocker where FIPS 140 conformance is required. There is no setting to change this.
+    refs: ["WireGuard whitepaper §5.4", "NIST SP 800-186", "FIPS 140-3"]
+    mitre: []
+    remediation: REM-WG-FIPS
+
+  # ------------------------------------------------------------------ OpenVPN, from a configuration file
+  - id: OVPN-CFG-CIPHER
+    title: Weak OpenVPN data-channel cipher configured
+    check: cfg_ovpn_cipher
+    protocol: openvpn
+    source: config
+    severity_by_key: {none: critical, weak: high, cbc: low}
+    description: >-
+      The data channel carries all user traffic. `cipher none` disables encryption, Blowfish/DES/3DES-class ciphers have a
+      64-bit block and are exposed to SWEET32 birthday attacks after enough data (CVE-2016-6329 for OpenVPN's old Blowfish default),
+      and CBC mode is the older construction compared with AES-GCM / ChaCha20-Poly1305.
+    refs: ["OpenVPN 2.6 manual: --data-ciphers", "CVE-2016-6329", "CVE-2016-2183", "NIST SP 800-131A Rev. 2"]
+    mitre: [T1600, T1040]
+    remediation: REM-OVPN-DATA-CIPHER
+
+  - id: OVPN-CFG-AUTH
+    title: Weak OpenVPN data-channel HMAC configured
+    check: cfg_ovpn_auth
+    protocol: openvpn
+    source: config
+    severity_by_key: {none: critical, md5: high, sha1: low}
+    description: >-
+      With a non-AEAD cipher the data channel is authenticated by the --auth digest. `auth none` leaves packets
+      unauthenticated (an attacker can modify them), MD5 is broken for collision resistance and HMAC-SHA1 is
+      legacy. AEAD ciphers (GCM, ChaCha20-Poly1305) ignore --auth.
+    refs: ["OpenVPN 2.6 manual: --auth", "NIST SP 800-131A Rev. 2", "RFC 6151 (MD5 security considerations)"]
+    mitre: [T1600, T1557]
+    remediation: REM-OVPN-DATA-CIPHER
+
+  - id: OVPN-CFG-TLS-MIN
+    title: OpenVPN allows deprecated TLS versions
+    check: cfg_ovpn_tls_min
+    protocol: openvpn
+    source: config
+    severity_by_key: {legacy: high, unset: low}
+    description: >-
+      `tls-version-min` below 1.2 permits TLS 1.0/1.1 (RFC 8996). When it is not set at all, the floor depends on the
+      OpenVPN and OpenSSL versions in use (OpenVPN 2.4 and older accept TLS 1.0), so the configuration alone does not guarantee a modern floor.
+    refs: ["RFC 8996", "OpenVPN 2.6 manual: --tls-version-min"]
+    mitre: [T1600]
+    remediation: REM-OVPN-TLS-MIN
+
+  - id: OVPN-CFG-TLS-CIPHER
+    title: Weak TLS suites allowed for the OpenVPN control channel
+    check: cfg_ovpn_tls_cipher
+    protocol: openvpn
+    source: config
+    severity_by_key: {weak: high, seclevel0: medium}
+    description: >-
+      `tls-cipher` names or allows NULL, export, anonymous, RC4, DES/3DES or MD5 suites, or lowers OpenSSL's security
+      level to 0 (`@SECLEVEL=0`), which re-enables algorithms OpenSSL disables by default.
+    refs: ["OpenVPN 2.6 manual: --tls-cipher", "RFC 9325 §4.1", "NIST SP 800-52 Rev. 2 §3.3"]
+    mitre: [T1600]
+    remediation: REM-OVPN-TLS-SUITE
+
+  - id: OVPN-CFG-CTRL-PROT
+    title: OpenVPN configuration has no tls-crypt or tls-auth
+    check: cfg_ovpn_ctrl
+    protocol: openvpn
+    source: config
+    severity_by_key: {none: medium, tls-auth: low}
+    description: >-
+      See OVPN-CTRL-UNPROTECTED: with no tls-crypt (or tls-crypt-v2) the OpenVPN port exposes the full TLS stack to
+      unauthenticated senders and the handshake is readable on the wire; tls-auth authenticates but does not encrypt.
+    refs: ["OpenVPN 2.6 manual: --tls-crypt, --tls-crypt-v2, --tls-auth"]
+    mitre: [T1595, T1499, T1040]
+    remediation: REM-OVPN-TLS-CRYPT
+
+  - id: OVPN-CFG-COMPRESS
+    title: OpenVPN compression enabled
+    check: cfg_ovpn_compress
+    protocol: openvpn
+    source: config
+    severity: medium
+    description: >-
+      Compression of encrypted traffic leaks information through packet sizes (the VORACLE attack lets an attacker who
+      can inject traffic recover secrets from the compressed tunnel). OpenVPN's own manual recommends against it
+      and, since 2.5, requires an explicit --allow-compression for it.
+    refs: ["OpenVPN 2.6 manual: --compress, --allow-compression, --comp-lzo (VORACLE warning)"]
+    mitre: [T1040]
+    remediation: REM-OVPN-COMPRESS
+
+  - id: OVPN-CFG-SERVER-VERIFY
+    title: OpenVPN client does not verify the server certificate's role
+    check: cfg_ovpn_server_verify
+    protocol: openvpn
+    source: config
+    severity: high
+    description: >-
+      The client config has none of `remote-cert-tls server`, `verify-x509-name`, `remote-cert-eku` or `ns-cert-type`.
+      Any certificate issued by the same CA, for example a client certificate, would then be accepted as the server's,
+      which allows a man-in-the-middle by any holder of a valid client certificate.
+    refs: ["OpenVPN 2.6 manual: --remote-cert-tls, --verify-x509-name"]
+    mitre: [T1557]
+    remediation: REM-OVPN-VERIFY
+
+  - id: OVPN-CFG-CLIENT-CERT
+    title: OpenVPN server does not require client certificates
+    check: cfg_ovpn_client_cert
+    protocol: openvpn
+    source: config
+    severity: medium
+    description: >-
+      `client-cert-not-required` or `verify-client-cert none|optional` makes username/password the only client
+      authentication, which can be guessed, phished or replayed from a leaked credential list.
+    refs: ["OpenVPN 2.6 manual: --verify-client-cert", "NIST SP 800-63B"]
+    mitre: [T1110.002]
+    remediation: REM-OVPN-CLIENT-CERT
+
+  - id: OVPN-CFG-DH
+    title: OpenVPN uses a small Diffie-Hellman parameter file
+    check: cfg_ovpn_dh
+    protocol: openvpn
+    source: config
+    severity_by_key: {under_1024: high, under_2048: medium}
+    description: >-
+      An inline <dh> block holds Diffie-Hellman parameters below 2048 bits. Use `dh none` (elliptic-curve DH) or at least 2048 bits.
+    refs: ["Logjam (weakdh.org)", "NIST SP 800-57 Part 1 Rev. 5 Table 2", "OpenVPN 2.6 manual: --dh"]
+    mitre: [T1040]
+    remediation: REM-OVPN-DH
+
+  - id: OVPN-CFG-CRL
+    title: OpenVPN server does not check a certificate revocation list
+    check: cfg_ovpn_crl
+    protocol: openvpn
+    source: config
+    severity: low
+    description: >-
+      A server with no `crl-verify` keeps accepting a client certificate until it expires, even after it is revoked
+      (a lost laptop, a leaver).
+    refs: ["OpenVPN 2.6 manual: --crl-verify", "RFC 5280 §5"]
+    mitre: []
+    remediation: REM-OVPN-CRL
+
+  - id: OVPN-CFG-RENEG
+    title: OpenVPN key renegotiation disabled
+    check: cfg_ovpn_reneg
+    protocol: openvpn
+    source: config
+    severity: low
+    description: >-
+      `reneg-sec 0` disables periodic renegotiation of the data-channel key, so one key protects an unbounded amount of traffic.
+    refs: ["OpenVPN 2.6 manual: --reneg-sec", "CVE-2016-2183"]
+    mitre: []
+    remediation: REM-OVPN-RENEG
+
+  - id: OVPN-CFG-SECRETS
+    title: Secret key material embedded in the configuration file
+    check: cfg_secrets
+    protocol: openvpn
+    source: config
+    severity: info
+    description: >-
+      The file carries a private key or a static tls-crypt / tls-auth key inline. Whoever holds the file holds that
+      credential. This analyzer discarded the key material while reading the file and stored none of it.
+    refs: ["NIST SP 800-57 Part 1 Rev. 5"]
+    mitre: [T1552.001]
+    remediation: REM-SECRETS
+
+  # ------------------------------------------------------------------ WireGuard, from a configuration file
+  - id: WG-CFG-NO-PSK
+    title: WireGuard peer has no PresharedKey
+    check: cfg_wg_psk
+    protocol: wireguard
+    source: config
+    severity: low
+    description: >-
+      Without a PresharedKey the handshake rests on Curve25519 alone. Traffic recorded today could be decrypted later
+      by an attacker with a large quantum computer (harvest now, decrypt later). A symmetric PresharedKey adds a layer
+      that does not depend on elliptic curves, at no performance cost.
+    refs: ["WireGuard whitepaper §5.2 (preshared symmetric key mode)", "NIST IR 8547 (transition to post-quantum cryptography)"]
+    mitre: [T1040]
+    remediation: REM-WG-PSK
+
+  - id: WG-CFG-WIDE-ALLOWEDIPS
+    title: WireGuard listening interface accepts a peer for any address
+    check: cfg_wg_allowedips
+    protocol: wireguard
+    source: config
+    severity: low
+    description: >-
+      On an interface with a ListenPort, a peer without an Endpoint (a roaming client) is allowed to use source
+      addresses 0.0.0.0/0 or ::/0. Cryptokey routing then accepts any source address from that peer, so a compromised
+      client can impersonate other addresses behind the server.
+    refs: ["WireGuard whitepaper §2.1 (cryptokey routing)"]
+    mitre: [T1557]
+    remediation: REM-WG-ALLOWEDIPS
+
+  - id: WG-CFG-SECRETS
+    title: WireGuard private key embedded in the configuration file
+    check: cfg_secrets
+    protocol: wireguard
+    source: config
+    severity: info
+    description: >-
+      The file contains the interface PrivateKey (and possibly PresharedKeys). Whoever holds the file can act as this
+      peer. This analyzer discarded the key material while reading the file and stored none of it.
+    refs: ["NIST SP 800-57 Part 1 Rev. 5"]
+    mitre: [T1552.001]
+    remediation: REM-SECRETS
+
+remediations:
+  REM-OVPN-TLS-MIN:
+    title: Require TLS 1.2 or newer on both OpenVPN ends
+    steps:
+      - Set tls-version-min 1.2 (or 1.3 when every client supports it) in the server and client configuration.
+      - Remove any tls-cipher / tls-version-max setting that re-enables legacy protocol versions.
+      - Upgrade OpenVPN 2.3/2.4 peers; they cannot do TLS 1.3 and may default to TLS 1.0.
+    example: |
+      # server.conf and client.conf
+      tls-version-min 1.2
+      tls-ciphersuites TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256
+  REM-OVPN-TLS-SUITE:
+    title: Restrict the OpenVPN control channel to forward-secret AEAD suites
+    steps:
+      - Allow only ECDHE (or DHE with at least 2048 bits) key exchange with AES-GCM or ChaCha20-Poly1305.
+      - Remove NULL, export, anonymous, RC4, DES/3DES, MD5 and static-RSA suites from tls-cipher.
+      - Do not lower the OpenSSL security level (@SECLEVEL=0).
+    example: |
+      tls-cipher "TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384:TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384"
+      tls-ciphersuites TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256
+  REM-OVPN-DH:
+    title: Use elliptic-curve DH or a 2048-bit-or-larger group
+    steps:
+      - Set `dh none` so OpenVPN uses ECDH with the curves from tls-groups.
+      - If finite-field DH is required, generate at least 2048-bit parameters, or use an RFC 7919 group.
+    example: |
+      dh none
+      tls-groups X25519:secp384r1
+  REM-OVPN-CERT:
+    title: Reissue the server certificate with a strong key and signature
+    steps:
+      - Issue a new server certificate with an RSA key of at least 2048 bits (3072 preferred) or an ECDSA P-256/P-384 key, signed with SHA-256 or stronger.
+      - Renew certificates before they expire and deploy the new CA/server certificates to clients.
+      - Retire the old key; treat it as compromised if it was under 2048 bits.
+    example: |
+      openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -keyout server.key -out server.csr
+  REM-OVPN-TLS-CRYPT:
+    title: Enable tls-crypt (or tls-crypt-v2) on server and clients
+    steps:
+      - Generate a key with `openvpn --genkey tls-crypt` and install it on both ends (tls-crypt-v2 for a key per client).
+      - Remove tls-auth; tls-crypt replaces it and also encrypts the control channel.
+      - "Restart both ends together: a mismatch makes the server silently drop the clients."
+    example: |
+      # server.conf and client.conf
+      tls-crypt tls-crypt.key
+      # per-client keys (OpenVPN 2.5+):  tls-crypt-v2 client.key  /  tls-crypt-v2 server.key
+  REM-OVPN-REACH:
+    title: Find out why the OpenVPN handshake does not complete
+    steps:
+      - 'Run both ends with `verb 4` and compare: TLS alerts, certificate verification errors and "TLS key negotiation failed" explain most cases.'
+      - If tls-auth / tls-crypt is in use, confirm both sides have the same key file and key-direction.
+      - Check that UDP on the server port is open end-to-end and that the server is the one answering.
+    example: |
+      verb 4
+  REM-OVPN-RENEG:
+    title: Keep periodic key renegotiation on
+    steps:
+      - Remove `reneg-sec 0`; the default of 3600 s is a sound value, and shorter values are fine on busy tunnels.
+      - Use AES-GCM or ChaCha20-Poly1305 rather than 64-bit block ciphers.
+    example: |
+      reneg-sec 3600
+  REM-OVPN-DATA-CIPHER:
+    title: Use an AEAD data-channel cipher and a strong HMAC
+    steps:
+      - Set data-ciphers AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305 on server and clients (OpenVPN 2.5+), and drop `cipher BF-CBC`/3DES/DES.
+      - Never use `cipher none` or `auth none`. With AEAD ciphers `auth` is not used.
+      - For CBC peers that cannot be upgraded, use `auth SHA256` or stronger.
+    example: |
+      data-ciphers AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305
+      data-ciphers-fallback AES-256-GCM
+  REM-OVPN-COMPRESS:
+    title: Turn compression off
+    steps:
+      - Remove comp-lzo / compress, and `allow-compression yes` on servers; use `allow-compression no`.
+      - Compress at the application layer where it is needed and safe.
+    example: |
+      allow-compression no
+  REM-OVPN-VERIFY:
+    title: Make clients verify that the peer is a server
+    steps:
+      - Add `remote-cert-tls server` to every client configuration, and `verify-x509-name` to pin the server name where practical.
+      - Issue server certificates with the serverAuth extended key usage and client certificates without it.
+    example: |
+      remote-cert-tls server
+      verify-x509-name vpn.example.com name
+  REM-OVPN-CLIENT-CERT:
+    title: Require client certificates (plus a second factor if passwords are used)
+    steps:
+      - Remove `client-cert-not-required` and set `verify-client-cert require`.
+      - If passwords stay, add MFA through the auth plug-in and rate-limit failed logins.
+    example: |
+      verify-client-cert require
+  REM-OVPN-CRL:
+    title: Publish and check a certificate revocation list
+    steps:
+      - Generate a CRL with your CA and point the server at it with crl-verify; refresh it on a schedule shorter than its nextUpdate.
+    example: |
+      crl-verify /etc/openvpn/crl.pem
+  REM-WG-REACH:
+    title: Check the WireGuard path and keys
+    steps:
+      - Confirm both peers have each other's correct public key and a reachable Endpoint (UDP port open in both directions).
+      - Watch `wg show` for latest handshake times; it should refresh about every two minutes while traffic flows.
+      - Rate-limit the UDP port at the network edge if a flood is suspected, and capture at one interface only.
+    example: |
+      wg show
+  REM-WG-PSK:
+    title: Add a PresharedKey to each peer
+    steps:
+      - Generate one per peer pair with `wg genpsk`, distribute it out of band, and add it to both ends.
+      - Rotate it with your normal key-rotation process.
+    example: |
+      [Peer]
+      PublicKey = <peer public key>
+      PresharedKey = <output of wg genpsk>
+  REM-WG-ALLOWEDIPS:
+    title: Restrict AllowedIPs to the addresses each peer really owns
+    steps:
+      - On a server, give each peer only its own /32 (or /128) and routed subnets, never 0.0.0.0/0.
+      - Reserve 0.0.0.0/0 for the client side of a full-tunnel setup.
+    example: |
+      [Peer]
+      AllowedIPs = 10.8.0.2/32
+  REM-WG-FIPS:
+    title: Use an IPsec profile where FIPS conformance is mandatory
+    steps:
+      - WireGuard's primitives cannot be changed; if FIPS 140 conformance is required, use IPsec with AES-GCM and ECDH groups instead.
+    example: |
+      # see the IPsec policy pack: AES-256-GCM-16 with ECP-384
+  REM-SECRETS:
+    title: Keep key material out of shared configuration files
+    steps:
+      - Store private keys in files with mode 600 owned by the VPN service rather than inline in documents that are copied around.
+      - Rotate any key that has been mailed, posted or committed to a repository.
+    example: |
+      chmod 600 /etc/wireguard/wg0.conf
+
+mitre_catalog:
+  T1040:     {name: "Network Sniffing", tactic: "Credential Access / Discovery", url: "https://attack.mitre.org/techniques/T1040/"}
+  T1557:     {name: "Adversary-in-the-Middle", tactic: "Credential Access / Collection", url: "https://attack.mitre.org/techniques/T1557/"}
+  T1110.002: {name: "Brute Force: Password Cracking", tactic: "Credential Access", url: "https://attack.mitre.org/techniques/T1110/002/"}
+  T1600:     {name: "Weaken Encryption", tactic: "Defense Evasion", url: "https://attack.mitre.org/techniques/T1600/"}
+  T1595:     {name: "Active Scanning", tactic: "Reconnaissance", url: "https://attack.mitre.org/techniques/T1595/"}
+  T1499:     {name: "Endpoint Denial of Service", tactic: "Impact", url: "https://attack.mitre.org/techniques/T1499/"}
+  T1552.001: {name: "Unsecured Credentials: Credentials In Files", tactic: "Credential Access", url: "https://attack.mitre.org/techniques/T1552/001/"}

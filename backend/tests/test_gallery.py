@@ -39,12 +39,14 @@ def test_every_card_has_a_story_a_kind_and_a_preview(client):
     assert [c["order"] for c in cards] == sorted(c["order"] for c in cards)
     assert cards[0]["name"] == "demo_gateway_audit"  # the best first click leads
     for c in cards:
-        assert c["title"] and c["story"] and c["kind"] in {"tour", "weak", "downgrade", "anomaly", "baseline", "real", "log"}
+        assert c["title"] and c["story"] and c["kind"] in {"tour", "weak", "downgrade", "anomaly", "baseline", "real", "log", "vpn", "config"}
         assert c["preview"], f"{c['name']} was never scored"
 
 
 def test_preview_equals_the_analysis_it_opens(client):
-    for c in _cards(client)[:6]:  # a spread of real, lab and simulated captures
+    cards = _cards(client)
+    spread = cards[:6] + [next(c for c in cards if c["kind"] == "vpn"), next(c for c in cards if c["kind"] == "config")]
+    for c in spread:  # a spread of real, lab and simulated captures, plus an OpenVPN/WireGuard capture and a configuration file
         a = client.post(f"/api/samples/{c['name']}/analyze").json()
         for _ in range(240):
             a = client.get(f"/api/analyses/{a['id']}").json()
