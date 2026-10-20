@@ -12,6 +12,7 @@ from sqlalchemy import delete
 from ..ml.model import DEFAULT_MODEL, AnomalyModel
 from ..pipeline import AnalysisResult, TunnelResult, analyze, analyze_log, analyze_vpn_config
 from ..rules import RuleEngine
+from . import alerts
 from . import db as dbm
 from .db import DATA_DIR
 
@@ -101,6 +102,7 @@ def run_analysis(analysis_id: int, pcap: Path, keys: Path | None, kind: str = "p
     """
     with _SLOTS:
         _run_analysis(analysis_id, pcap, keys, kind)
+    alerts.notify_if_risky(analysis_id)  # outside the slot so a slow receiver never delays the queue; never raises
 
 
 def _run_analysis(analysis_id: int, pcap: Path, keys: Path | None, kind: str = "pcap") -> None:

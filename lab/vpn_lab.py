@@ -80,7 +80,8 @@ def pki(d: Path) -> None:
     def run(*a: str) -> None:
         subprocess.run(a, cwd=d, check=True, capture_output=True)
     run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "ca.key", "-out", "ca.crt", "-subj", "/CN=Lab CA", "-days", "30", "-sha256")
-    for n, eku in (("server", "serverAuth"), ("client", "clientAuth")):
+    for n in ("server", "client"):
+        eku = f"{n}Auth"  # serverAuth / clientAuth extended key usage
         (d / f"{n}.ext").write_text(f"basicConstraints=CA:FALSE\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage={eku}\n")
         run("openssl", "req", "-newkey", "rsa:2048", "-nodes", "-keyout", f"{n}.key", "-out", f"{n}.csr", "-subj", f"/CN={n}")
         run("openssl", "x509", "-req", "-in", f"{n}.csr", "-CA", "ca.crt", "-CAkey", "ca.key", "-CAcreateserial", "-out", f"{n}.crt", "-days", "30", "-sha256", "-extfile", f"{n}.ext")

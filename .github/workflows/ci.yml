@@ -65,7 +65,7 @@ jobs:
         working-directory: frontend
       - name: Start API and UI
         run: |
-          (cd backend && nohup python -m uvicorn ipsec_analyzer.api.main:app --port 8000 > ../data/_api.log 2>&1 &)
+          (cd backend && ALERTS_ALLOW_PRIVATE=1 nohup python -m uvicorn ipsec_analyzer.api.main:app --port 8000 > ../data/_api.log 2>&1 &)
           (cd frontend && nohup npm run dev -- --port 5173 --strictPort > ../data/_ui.log 2>&1 &)
           for i in $(seq 1 60); do
             curl -fs http://localhost:8000/api/health > /dev/null && curl -fs http://localhost:5173/ > /dev/null && exit 0

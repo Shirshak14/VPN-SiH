@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, create_engine, inspect, text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).resolve().parents[3] / "data"))
@@ -39,6 +39,33 @@ class UserSession(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class AlertSettings(Base):
+    """Per-user notification preferences: one row per user."""
+    __tablename__ = "alert_settings"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    min_risk: Mapped[float] = mapped_column(Float, default=33.0)  # alert when any tunnel scores at least this (33 = the policy's "high" band)
+    email_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    email_to: Mapped[str | None] = mapped_column(String(254), nullable=True)
+    webhook_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    webhook_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)  # may embed a token (Slack/Teams): never returned in full
+    webhook_secret: Mapped[str] = mapped_column(String(64))  # signs webhook bodies (HMAC-SHA256)
+
+
+class AlertEvent(Base):
+    """One delivery attempt, kept so users can see what was sent (or why not)."""
+    __tablename__ = "alert_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    analysis_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # NULL for a test message
+    channel: Mapped[str] = mapped_column(String(16))  # email | webhook
+    status: Mapped[str] = mapped_column(String(16))  # sent | failed
+    detail: Mapped[str] = mapped_column(String(500), default="")
+    tunnels: Mapped[int] = mapped_column(Integer, default=0)
+    top_risk: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
 
 
 class Analysis(Base):

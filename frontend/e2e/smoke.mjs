@@ -8,6 +8,7 @@
 // API_KEY (set it when the API runs with API_KEY: the test then also exercises the sign-in form, with a wrong key first).
 // It uploads data/captures/synthetic/demo_gateway_audit.pcap and clicks a bundled scenario, so it creates two analyses; both are deleted at the end.
 import { spawn } from "node:child_process";
+import http from "node:http";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -278,6 +279,34 @@ try {
   await send("Input.insertText", { text: "smoke test run" });
   await run(() => document.querySelector(".name-input").blur());
   check("renaming a saved analysis sticks", await waitFor(() => document.querySelector(".name-btn")?.textContent === "smoke test run"));
+  // alerts: configure a webhook pointing at a receiver started by this script, send a test, check what arrives
+  const hooks = [];
+  const receiver = http.createServer((req, res) => { let b = ""; req.on("data", (d) => (b += d)); req.on("end", () => { hooks.push({ headers: req.headers, body: b }); res.end("ok"); }); });
+  await new Promise((r) => receiver.listen(0, "127.0.0.1", r));
+  await clickNav("Alerts");
+  check("Alerts page opens for a signed-in user", await waitFor(() => document.querySelector("h1")?.textContent === "Alerts" && !!document.getElementById("al-on")));
+  check("alerts start switched off with the 'high' threshold", await run(() => !document.getElementById("al-on").checked && document.getElementById("al-risk").value === "33"));
+  await run(() => document.getElementById("al-on").click());
+  await run(() => document.getElementById("al-hook").click());
+  await typeInto("al-url", `http://127.0.0.1:${receiver.address().port}/hook/secret-token`);
+  await run(() => [...document.querySelectorAll("button")].find((b) => b.textContent === "Save and send test").click());
+  const privateOk = await run(async () => (await (await fetch("/api/alerts")).json()).settings.allow_private);
+  if (privateOk) {
+    check("test alert reaches the webhook receiver, signed", await waitFor(() => !!document.querySelector('form[aria-label="Alert settings"] [role=status]')?.textContent.startsWith("Test sent"))
+      && hooks.length === 1 && /^sha256=[0-9a-f]{64}$/.test(hooks[0].headers["x-signature"]) && JSON.parse(hooks[0].body).test === true, JSON.stringify(hooks.map((h) => h.headers["x-signature"])));
+    check("delivery log lists the test as sent", await waitFor(() => /sent/.test(document.querySelector('section[aria-label="Delivery log"] tbody tr')?.textContent || "") && /test message/.test(document.querySelector('section[aria-label="Delivery log"] tbody tr').textContent)));
+    check("the saved webhook URL token is not shown back in the page", await run(() => !document.body.innerText.includes("secret-token") && !document.getElementById("al-url").placeholder.includes("secret-token")));
+    // a risky analysis while alerts are on fires a real alert
+    await nav(BASE + "/#/");
+    await waitFor(() => document.querySelectorAll(".gal-card button").length > 0);
+    await run(() => document.querySelector(".gal-card button").click());
+    await waitFor(() => /^#\/a\/\d+$/.test(location.hash) && !!document.querySelector(".res-summary"), [], 40000);
+    check("a high-risk analysis triggers an alert with its tunnels", await (async () => { for (let i = 0; i < 50 && hooks.length < 2; i++) await sleep(200); return hooks.length === 2 && JSON.parse(hooks[1].body).event === "ipsec_analyzer.high_risk_tunnel" && JSON.parse(hooks[1].body).tunnel_count >= 1; })());
+  } else {
+    for (let i = problems.length - 1; i >= 0; i--) if (problems[i].includes("422")) problems.splice(i, 1);  // the deliberate refusal
+    check("a private receiver is refused with a clear message (server blocks internal addresses)", await waitFor(() => /private/.test(document.querySelector('form[aria-label="Alert settings"] [role=alert]')?.textContent || "")) && hooks.length === 0);
+  }
+  receiver.close();
   await run(() => [...document.querySelectorAll(".topbar button")].find((b) => b.textContent === "Sign out")?.click());  // API-key mode only
   await run(() => document.querySelector(".acct-link").click());
   await run(() => [...document.querySelectorAll("button")].find((b) => b.textContent === "Sign out").click());
@@ -290,7 +319,7 @@ try {
   check("a wrong password shows an error", await waitFor(() => !!document.querySelector("form [role=alert]")));
   for (let i = problems.length - 1; i >= 0; i--) if (problems[i].includes("401")) problems.splice(i, 1);  // the deliberate failed sign-in
   await typeInto("acct-pw", pw); await submitForm("Sign in to your account");
-  check("signing back in restores the saved analysis with its name", await waitFor(() => location.hash === "#/history" && document.querySelector(".name-btn")?.textContent === "smoke test run"), await hash());
+  check("signing back in restores the saved analysis with its name", await waitFor((n) => location.hash === "#/history" && [...document.querySelectorAll(".name-btn")].some((b) => b.textContent === "smoke test run") && document.querySelectorAll("tbody tr").length === n, [privateOk ? 2 : 1]), await hash());
   await nav(BASE + "/#/account");
   await waitFor(() => !!document.getElementById("pw-del") || [...document.querySelectorAll("button")].some((b) => b.textContent.startsWith("Delete my account")));
   await run(() => [...document.querySelectorAll("button")].find((b) => b.textContent.startsWith("Delete my account")).click());
