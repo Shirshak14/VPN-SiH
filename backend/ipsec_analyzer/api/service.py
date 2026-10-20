@@ -10,12 +10,13 @@ from typing import Any
 from sqlalchemy import delete
 
 from ..ml.model import DEFAULT_MODEL, AnomalyModel
-from ..pipeline import AnalysisResult, TunnelResult, analyze, analyze_log
+from ..pipeline import AnalysisResult, TunnelResult, analyze, analyze_log, analyze_vpn_config
 from ..rules import RuleEngine
 from . import db as dbm
 from .db import DATA_DIR
 
 _engine: RuleEngine | None = None
+_vpn_engine: Any = None
 _model: AnomalyModel | None = None
 
 
@@ -24,6 +25,14 @@ def get_engine() -> RuleEngine:
     if _engine is None:
         _engine = RuleEngine(os.environ.get("POLICY_PATH") or None)
     return _engine
+
+
+def get_vpn_engine() -> Any:
+    from ..vpn.rules import VpnRuleEngine
+    global _vpn_engine
+    if _vpn_engine is None:
+        _vpn_engine = VpnRuleEngine(get_engine().policy, os.environ.get("VPN_POLICY_PATH") or None)
+    return _vpn_engine
 
 
 def get_model() -> AnomalyModel | None:
@@ -63,16 +72,21 @@ def tunnel_payload(r: TunnelResult) -> dict[str, Any]:
 def summarize(res: AnalysisResult) -> dict[str, Any]:
     st = res.capture.stats
     bands: dict[str, int] = {}
-    for r in res.tunnels:
+    everything = res.everything
+    for r in everything:
         bands[r.risk.band] = bands.get(r.risk.band, 0) + 1
+    vpn_seen: dict[str, int] = {}
+    for r in res.vpn:
+        vpn_seen[r.tunnel.protocol] = vpn_seen.get(r.tunnel.protocol, 0) + 1
+    other = [{**v, "analysed": vpn_seen.get(v["protocol"], 0)} for v in st.other_vpn]
     return {
         "packets": st.packets, "ike_messages": st.ike_messages, "ike_malformed": st.ike_malformed,
         "esp_packets": st.esp_packets, "ah_packets": st.ah_packets, "natt_keepalives": st.natt_keepalives,
-        "tunnel_count": len(res.tunnels), "bands": bands, "orphan_esp_flows": len(res.reconstruction.orphan_esp),
+        "tunnel_count": len(everything), "vpn_tunnels": len(res.vpn), "bands": bands, "orphan_esp_flows": len(res.reconstruction.orphan_esp),
         "policy": res.policy_name, "anomaly_model": get_model() is not None,
         "decrypted_tunnels": sum(1 for r in res.tunnels if r.tunnel.decrypted),
-        "other_vpn": st.other_vpn, "parse_errors": st.errors[:10], "duration_s": round(st.last_ts - st.first_ts, 2),
-        "source": "log" if res.log is not None else "capture", "log": res.log,
+        "other_vpn": other, "parse_errors": st.errors[:10], "duration_s": round(st.last_ts - st.first_ts, 2),
+        "source": "log" if res.log is not None else "config" if res.config is not None else "capture", "log": res.log, "config": res.config,
     }
 
 
@@ -82,7 +96,7 @@ _SLOTS = threading.BoundedSemaphore(max(1, int(os.environ.get("MAX_CONCURRENT_AN
 def run_analysis(analysis_id: int, pcap: Path, keys: Path | None, kind: str = "pcap") -> None:
     """Executed in a worker thread; at most MAX_CONCURRENT_ANALYSES run at once (the rest stay "queued").
 
-    `kind` is "pcap" (a capture) or "log" (a strongSwan daemon log). Re-running an analysis id replaces its tunnels,
+    `kind` is "pcap" (a capture), "log" (a strongSwan daemon log) or "config" (an OpenVPN / WireGuard configuration file). Re-running an analysis id replaces its tunnels,
     which is how a watched file that changed is refreshed in place.
     """
     with _SLOTS:
@@ -98,13 +112,18 @@ def _run_analysis(analysis_id: int, pcap: Path, keys: Path | None, kind: str = "
             s.commit()
 
     try:
-        res = analyze_log(pcap, get_engine(), progress=stage) if kind == "log" else analyze(pcap, keys, get_engine(), get_model(), progress=stage)
+        if kind == "log":
+            res = analyze_log(pcap, get_engine(), progress=stage)
+        elif kind == "config":
+            res = analyze_vpn_config(pcap, get_engine(), progress=stage)
+        else:
+            res = analyze(pcap, keys, get_engine(), get_model(), progress=stage)
         with dbm.SessionLocal() as s:
             a = s.get(dbm.Analysis, analysis_id)
             s.execute(delete(dbm.TunnelRow).where(dbm.TunnelRow.analysis_id == analysis_id))
             a.error = None
             a.summary, a.seconds, a.status, a.stage = summarize(res), round(res.seconds, 3), "done", "done"
-            for r in res.tunnels:
+            for r in res.everything:
                 s.add(dbm.TunnelRow(analysis_id=analysis_id, tunnel_id=r.tunnel.id, risk=r.risk.score, band=r.risk.band,
                                 payload=tunnel_payload(r)))
             s.commit()

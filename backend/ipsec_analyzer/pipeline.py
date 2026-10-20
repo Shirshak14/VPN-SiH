@@ -1,8 +1,9 @@
 """End-to-end analysis: PCAP -> parse -> reconstruct -> rules -> (anomaly) -> risk."""
 from __future__ import annotations
 
+import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
@@ -29,6 +30,13 @@ class AnalysisResult:
     policy_name: str
     seconds: float
     log: dict[str, Any] | None = None  # set when the tunnels came from a daemon log instead of a capture
+    vpn: list[TunnelResult] = field(default_factory=list)  # OpenVPN / WireGuard sessions (or the one configuration file)
+    config: dict[str, Any] | None = None  # set when the input was an OpenVPN / WireGuard configuration file
+
+    @property
+    def everything(self) -> list[TunnelResult]:
+        """IPsec tunnels and OpenVPN / WireGuard sessions together, highest risk first."""
+        return sorted(self.tunnels + self.vpn, key=lambda r: r.risk.score, reverse=True)
 
 
 def analyze(pcap: str | Path, keys: str | Path | None = None, engine: RuleEngine | None = None,
@@ -44,6 +52,52 @@ def analyze(pcap: str | Path, keys: str | Path | None = None, engine: RuleEngine
     step("rules + anomaly model")
     res = AnalysisResult([TunnelResult(t, engine.evaluate(t), None) for t in rec.tunnels], rec, cap, engine.policy.name, 0.0)
     score_analyses([res], anomaly_model, engine)
+    if cap.vpn_tunnels:
+        step("OpenVPN / WireGuard rules")
+        res.vpn, vpn_policy = assess_vpn(cap.vpn_tunnels, engine)
+        res.policy_name += f" + {vpn_policy}"
+    res.seconds = time.perf_counter() - t0
+    return res
+
+
+_VPN_ENGINES: dict[int, Any] = {}
+
+
+def assess_vpn(tunnels: list[Any], engine: RuleEngine) -> tuple[list[TunnelResult], str]:
+    """Rules + risk for OpenVPN / WireGuard tunnels. Scored like IPsec tunnels (same weights, same bands); there is no behavioural model."""
+    from .vpn.rules import VpnRuleEngine
+    ve = _VPN_ENGINES.get(id(engine.policy))
+    if ve is None:  # the pack is read from disk once per policy object, not once per analysis
+        ve = _VPN_ENGINES[id(engine.policy)] = VpnRuleEngine(engine.policy, os.environ.get("VPN_POLICY_PATH") or None)
+    out = []
+    for t in tunnels:
+        findings = ve.evaluate(t)
+        out.append(TunnelResult(t, findings, score_tunnel(findings, None, engine.policy)))
+    out.sort(key=lambda r: r.risk.score, reverse=True)
+    return out, ve.name
+
+
+def analyze_vpn_config(path: str | Path, engine: RuleEngine | None = None, progress: Callable[[str], None] | None = None,
+                       name: str | None = None) -> AnalysisResult:
+    """An OpenVPN or WireGuard configuration file -> one configured 'tunnel' -> config rules -> risk. No packets are involved."""
+    from .parser.models import CaptureStats, ParsedCapture
+    from .sa import Reconstruction
+    from .vpn.config import MAX_BYTES, parse_config
+
+    t0 = time.perf_counter()
+    step = progress or (lambda _s: None)
+    step("reading configuration")
+    engine = engine or RuleEngine()
+    raw = Path(path).read_bytes()
+    if len(raw) > MAX_BYTES:
+        raise ValueError("configuration file larger than 1 MB")
+    tunnel = parse_config(raw.decode("utf-8", errors="replace"), name or Path(path).name)
+    step("OpenVPN / WireGuard rules")
+    vpn, vpn_policy = assess_vpn([tunnel], engine)
+    stats = CaptureStats()
+    cap = ParsedCapture(path=str(path), ike=[], esp_flows=[], stats=stats)
+    res = AnalysisResult([], Reconstruction([], [], stats), cap, f"{engine.policy.name} + {vpn_policy}", 0.0,
+                         vpn=vpn, config={"protocol": tunnel.protocol, "role": tunnel.facts.get("role")})
     res.seconds = time.perf_counter() - t0
     return res
 

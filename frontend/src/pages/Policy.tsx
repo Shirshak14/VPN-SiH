@@ -15,6 +15,38 @@ function Severity({ r }: { r: Json }) {
   );
 }
 
+function RulesTable({ rules, fired }: { rules: Json[]; fired: Map<string, number> | null }) {
+  return (
+    <div className="tablewrap">
+          <table className="pol-rules">
+            <thead><tr><th>Rule</th><th>Severity</th><th>Sources</th><th>ATT&CK</th><th>Fix</th>{fired && <th>Fired</th>}</tr></thead>
+            <tbody>
+              {rules.map((r: Json) => {
+                const n = fired?.get(r.id);
+                return (
+                  <tr key={r.id} className={n ? "fired" : ""}>
+                    <td>
+                      <div className="mono"><b>{r.id}</b></div>
+                      {r.source && <div className="small muted">{r.protocol} · {r.source === "any" ? "capture or config" : r.source}</div>}
+                      <div>{r.title}</div>
+                      <div className="small muted">{r.description}</div>
+                    </td>
+                    <td><Severity r={r} /></td>
+                    <td className="small">{r.refs.map((ref: string) => <div key={ref}>{ref}</div>)}</td>
+                    <td>{r.mitre_detail.length === 0 ? <span className="muted small">none mapped</span> : r.mitre_detail.map((m: Json) => (
+                      <a key={m.id} className="chip" href={m.url} target="_blank" rel="noreferrer" title={m.tactic}>{m.id} {m.name}</a>
+                    ))}</td>
+                    <td className="small">{r.remediation.title}</td>
+                    {fired && <td>{n ? <span className="badge high">{n} tunnel{n === 1 ? "" : "s"}</span> : <span className="muted small">–</span>}</td>}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+    </div>
+  );
+}
+
 export default function Policy({ aid }: { aid?: number }) {
   const [p, setP] = useState<Json | null>(null);
   const [a, setA] = useState<Analysis | null>(null);
@@ -37,7 +69,8 @@ export default function Policy({ aid }: { aid?: number }) {
 
   if (error) return <ErrorBox error={error} retry={load} />;
   if (!p || (aid && !fired)) return <Loading what="Loading policy pack" />;
-  const nFired = fired ? p.rules.filter((r: Json) => fired.has(r.id)).length : 0;
+  const vpnRules: Json[] = p.other_vpn?.rules ?? [];
+  const nFired = fired ? [...p.rules, ...vpnRules].filter((r: Json) => fired.has(r.id)).length : 0;
 
   return (
     <div className="res">
@@ -46,7 +79,7 @@ export default function Policy({ aid }: { aid?: number }) {
         <h1>Policy pack</h1>
         <div className="res-meta small muted">
           <span>{p.name}</span>
-          <span>{p.rules.length} rules</span>
+          <span>{p.rules.length + vpnRules.length} rules</span>
           {a && <span><b className="fired-dot" /> {nFired} fired in analysis #{a.id}</span>}
         </div>
         <p className="small muted">Every check the analyzer runs, the standard it comes from, the ATT&CK technique it maps to and the fix it recommends. Rules marked "if prohibited / if deprecated" take their severity from the algorithm tiers below.</p>
@@ -54,33 +87,15 @@ export default function Policy({ aid }: { aid?: number }) {
 
       <section className="res-section">
         <div className="sec-head"><h2>Rules</h2>{a && <span className="small muted">highlighted rows fired in this analysis</span>}</div>
-        <div className="tablewrap">
-          <table className="pol-rules">
-            <thead><tr><th>Rule</th><th>Severity</th><th>Sources</th><th>ATT&CK</th><th>Fix</th>{fired && <th>Fired</th>}</tr></thead>
-            <tbody>
-              {p.rules.map((r: Json) => {
-                const n = fired?.get(r.id);
-                return (
-                  <tr key={r.id} className={n ? "fired" : ""}>
-                    <td>
-                      <div className="mono"><b>{r.id}</b></div>
-                      <div>{r.title}</div>
-                      <div className="small muted">{r.description}</div>
-                    </td>
-                    <td><Severity r={r} /></td>
-                    <td className="small">{r.refs.map((ref: string) => <div key={ref}>{ref}</div>)}</td>
-                    <td>{r.mitre_detail.length === 0 ? <span className="muted small">none mapped</span> : r.mitre_detail.map((m: Json) => (
-                      <a key={m.id} className="chip" href={m.url} target="_blank" rel="noreferrer" title={m.tactic}>{m.id} {m.name}</a>
-                    ))}</td>
-                    <td className="small">{r.remediation.title}</td>
-                    {fired && <td>{n ? <span className="badge high">{n} tunnel{n === 1 ? "" : "s"}</span> : <span className="muted small">–</span>}</td>}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <RulesTable rules={p.rules} fired={fired} />
       </section>
+
+      {vpnRules.length > 0 && (
+        <section className="res-section">
+          <div className="sec-head"><h2>OpenVPN and WireGuard rules</h2><span className="small muted">{p.other_vpn.name} · rows say whether a rule reads a capture, a configuration file or both; a rule with several outcomes shows "if &lt;outcome&gt;"</span></div>
+          <RulesTable rules={vpnRules} fired={fired} />
+        </section>
+      )}
 
       <section className="res-section">
         <div className="sec-head"><h2>Algorithm tiers</h2><span className="small muted">how a negotiated algorithm is graded (RFC 8221 / RFC 8247 / NIST SP 800-77r1)</span></div>

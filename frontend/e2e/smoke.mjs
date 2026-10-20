@@ -20,6 +20,8 @@ const KEY = process.env.API_KEY || "";
 const AUTH = KEY ? { "X-API-Key": KEY } : {};  // node-side requests; the browser signs in through the UI
 const PCAP = path.resolve(HERE, "../../data/captures/synthetic/demo_gateway_audit.pcap");
 const LOG = path.resolve(HERE, "../../data/logs/strongswan_gateway.log");
+const OVPN_PCAP = path.resolve(HERE, "../../data/captures/vpn/ovpn_tls10_legacy.pcap");
+const OVPN_CONF = path.resolve(HERE, "../../data/configs/openvpn_legacy_client.ovpn");
 
 function findBrowser() {
   const c = [process.env.CHROME_PATH,
@@ -31,7 +33,7 @@ function findBrowser() {
 }
 
 if (typeof WebSocket === "undefined") { console.error("Node >= 22 is required (global WebSocket)."); process.exit(2); }
-if (!existsSync(PCAP) || !existsSync(LOG)) { console.error("Missing fixture " + PCAP); process.exit(2); }
+if (!existsSync(PCAP) || !existsSync(LOG) || !existsSync(OVPN_PCAP) || !existsSync(OVPN_CONF)) { console.error("Missing fixture " + PCAP); process.exit(2); }
 const browser = findBrowser();
 if (!browser) { console.error("No Chrome/Chromium/Edge found. Set CHROME_PATH."); process.exit(2); }
 try { await fetch(BASE + "/api/health"); } catch { console.error(`App not reachable at ${BASE} (start the API and the UI first).`); process.exit(2); }
@@ -103,7 +105,7 @@ try {
 
   // ---- 1. root URL and navigation
   await nav(BASE + "/");
-  check("root renders the Analyze page", await waitFor(() => document.querySelector("h1")?.textContent.includes("Automate IPsec/IKE")));
+  check("root renders the Analyze page", await waitFor(() => document.querySelector("h1")?.textContent.includes("Automate VPN security assessment")));
   check("root URL is exactly the app URL", (await run(() => location.href)) === BASE + "/", await run(() => location.href));
   await clickNav("Evaluation");
   check("Evaluation page opens", await waitFor(() => document.querySelector("h1")?.textContent === "Evaluation"));
@@ -154,7 +156,7 @@ try {
   check("risk distribution matches the API and sits below the table", JSON.stringify(await run(() => [...document.querySelectorAll(".dist .badge")].map((b) => b.textContent.trim().toLowerCase()))) === JSON.stringify(bandsApi)
     && await run(() => !!(document.querySelector("table").compareDocumentPosition(document.querySelector(".dist")) & Node.DOCUMENT_POSITION_FOLLOWING)));
   check("an uploaded capture is labelled user upload, not synthetic", await run(() => document.querySelector("h1 .badge")?.textContent.toLowerCase() === "user upload" && !document.querySelector(".banner.compact")));
-  check("table keeps all six columns", (await run(() => [...document.querySelectorAll("thead th")].map((t) => t.textContent).join("|"))) === "Risk|Peers|Mode|Negotiated IKE suite|Findings|Anomaly");
+  check("table keeps all six columns", (await run(() => [...document.querySelectorAll("thead th")].map((t) => t.textContent).join("|"))) === "Risk|Peers|Mode|Negotiated suite|Findings|Anomaly");
   check("results page offers the printable report, PDF, HTML, link, JSON and syslog", JSON.stringify(await run(() => [...document.querySelectorAll(".res-actions > *")].slice(0, 6).map((e) => e.textContent.trim()))) === JSON.stringify(["Open printable report", "Download PDF", "Download HTML", "Copy report link", "JSON", "Syslog / CEF"]));
   check("printable report opens in a new tab", await run(() => { const a = document.querySelector(".res-actions a.primary"); return a.target === "_blank" && a.getAttribute("href").endsWith("/report.html"); }));
   for (const [file, type] of [["report.pdf", "pdf"], ["report.html", "html"], ["export.json", "json"], ["export.syslog", "text"]]) {
@@ -211,6 +213,28 @@ try {
   await run(() => document.querySelector("tbody tr.click").click());
   check("a log-derived tunnel opens without a timeline", await waitFor(() => [...document.querySelectorAll("h2")].some((h) => h.textContent.startsWith("Rule-engine findings"))));
   check("its coverage note explains the log source", await run(() => document.body.innerText.includes("Assessed from a daemon log, not from packets")));
+
+  // ---- 4c. OpenVPN capture and OpenVPN config: both upload through the same form and are analysed, not just "seen"
+  for (const [file, label, banner, fromConfig] of [[OVPN_PCAP, "ovpn_tls10_legacy.pcap", null, false], [OVPN_CONF, "openvpn_legacy_client.ovpn", "configuration file", true]]) {
+    await nav(BASE + "/#/");
+    await waitFor(() => !!document.querySelector(".az-drop input[type=file]"));
+    const dV = await send("DOM.getDocument", { depth: 1 });
+    const iV = await send("DOM.querySelector", { nodeId: dV.result.root.nodeId, selector: ".az-drop input[type=file]" });
+    await send("DOM.setFileInputFiles", { nodeId: iV.result.nodeId, files: [file] });
+    check(`${label} is accepted`, await waitFor((n) => document.querySelector(".az-file")?.textContent === n, [label]));
+    const beforeV = (await api("/api/analyses")).map((a) => a.id);
+    await run(() => document.querySelector(".az-go").click());
+    check(`${label} opens the results page`, await waitFor(() => /^#\/a\/\d+$/.test(location.hash) && !!document.querySelector(".res-summary .hero-score"), [], 40000), await hash());
+    for (const a of await api("/api/analyses")) if (!beforeV.includes(a.id)) created.push(a.id);
+    const TV = await api(`/api/analyses/${Number((await hash()).split("/")[2])}/tunnels`);
+    check(`${label} yields an analysed VPN tunnel with findings`, TV.length >= 1 && TV[0].protocol !== undefined && TV.some((t) => t.violations.length > 0), `${TV.length} tunnel(s), top ${Math.max(...TV.map((t) => t.risk.score))}`);
+    check(`${label} hero score is the highest tunnel risk`, (await run(() => document.querySelector(".hero-score").textContent)) === String(Math.max(...TV.map((t) => t.risk.score))));
+    if (banner) check("config results say they come from a file, not traffic", await run((b) => document.body.innerText.toLowerCase().includes(b), banner));
+    await run(() => document.querySelector("tbody tr.click").click());
+    check(`${label} tunnel opens with rule-engine findings`, await waitFor(() => [...document.querySelectorAll("h2")].some((h) => h.textContent.startsWith("Rule-engine findings"))));
+    check(`${label} detail has no IPsec-only cards`, await run(() => ![...document.querySelectorAll("h2")].some((h) => /child sa|esp/i.test(h.textContent))));
+    check(`${label} report renders`, (await fetch(`${BASE}/api/analyses/${Number((await hash()).split("/")[2])}/report.html`, { headers: AUTH })).status === 200);
+  }
 
   // ---- 5. Evaluation page: every number comes from /api/metrics
   const M = await api("/api/metrics");
@@ -287,6 +311,7 @@ try {
 } catch (e) {
   failures++;
   console.log("FAIL test run aborted: " + (e?.stack || e));
+  if (problems.length) console.log("browser problems: " + problems.slice(0, 5).join(" || "));
 } finally {
   await cleanup();
 }

@@ -114,6 +114,29 @@ Beyond uploading a PCAP, three ways in, all optional and **off by default**:
 * Polling, not inotify: latency is the scan interval plus the settle time. UDP syslog is unauthenticated and lossy; restrict the port and use `SYSLOG_ALLOW`. TCP/TLS syslog is not implemented, and log rotation on the receiver drops the oldest half of a file (which can cut off the early lines of a long-lived SA).
 * Nothing here sniffs a network interface. The watcher only reads files other tools wrote.
 
+## OpenVPN and WireGuard
+
+Captures and configuration files for the two other common VPNs are assessed with the same findings, risk score, reports and remediation plan as IPsec. They use their own rule pack, `backend/policy/other_vpn.yaml` (override with `VPN_POLICY_PATH`); the Policy page lists every rule with its sources.
+
+| Evidence | How it gets in | What is assessed |
+|---|---|---|
+| **OpenVPN capture** | any `.pcap` with OpenVPN over UDP | control-channel protection (none / tls-auth / tls-crypt / tls-crypt-v2) and its HMAC, and, when the control channel is plaintext TLS, the TLS version offered and negotiated, cipher suite (null, export, RC4, 3DES, CBC-SHA1, no forward secrecy), DHE size, server certificate key size and signature hash, alerts, stalled or unanswered handshakes, renegotiation |
+| **WireGuard capture** | any `.pcap` with WireGuard | handshake completion, unanswered initiations and bursts of them, cookie replies (server under load), key age against the 120 s and 180 s limits, repeated transport counters (replay), endpoint changes |
+| **Configuration file** | the Analyze page (`.ovpn`, `.conf`) or `POST /api/configs` (multipart `config`, 1 MB cap) | OpenVPN: `cipher`/`data-ciphers`, `auth`, `tls-version-min`, `tls-cipher`, control-channel protection, compression, server verification, client-certificate checks, CRL, DH size, renegotiation. WireGuard: missing `PresharedKey`, wide `AllowedIPs`, and the fixed suite |
+
+**Secrets.** Private keys, inline `<key>`/`<tls-auth>`/`<tls-crypt>`/`<pkcs12>` blocks and WireGuard `PrivateKey`/`PresharedKey` values are removed before a config is written to disk (`uploads/<id>/config.txt` keeps the line numbers), and the stored facts keep directive names and only the argument values the rules read. The analysis can say a key was present, not what it was.
+
+**Validated against real traffic.** `lab/vpn_lab.py` (run as root; needs `openvpn`, `wireguard-go`, `tcpdump`, `ip`) builds two network namespaces and captures 15 scenarios with OpenVPN 2.6 and wireguard-go; they are in `data/captures/vpn/` with a `manifest.json` of ground truth read from the configs, and `tests/test_vpn_real.py` checks the exact TLS version, suite, certificate and rule set for each. Cases a real daemon will not produce (a 1024-bit DH prime, a NULL suite, a TLS alert, a replayed WireGuard counter) are byte-built in `backend/synth/vpn_builder.py` and tested separately. Both kinds show as *real · lab traffic* or *sample config* in the UI, never as field data.
+
+Honest limits:
+
+* **The OpenVPN data channel is never visible in a capture**: its cipher, digest and compression are negotiated inside TLS and then encrypted. Only a config file can be assessed for them, and even that shows intent, not what two peers agreed on. A capture says so in a coverage note on every OpenVPN tunnel.
+* `tls-crypt`/`tls-crypt-v2` hide the TLS handshake, and TLS 1.3 hides the server certificate, so those parameters are reported as hidden, not as good.
+* A protected (tls-auth/tls-crypt) client reset is only recognised when the server answers or the port is UDP/1194; OpenVPN on UDP 500 or 4500 is routed to the IKE parser and missed. OpenVPN over TCP is not parsed.
+* WireGuard pre-shared-key use cannot be seen on the wire (config files can show it); WireGuard has no negotiation, so the capture rules look at behaviour and timing only.
+* There is no anomaly model for these tunnels, and the watched folder and syslog paths do not ingest config files. Severity weights follow the IPsec pack and are judgment calls.
+* Rules were written from the OpenVPN source/man page and the WireGuard whitepaper; they are not a compliance audit.
+
 ## Access control and limits
 
 The demo is open by default. For a shared deployment set an access key (no code change):
@@ -157,7 +180,7 @@ Behavioural families (all simulator-only, designed by us): oversize handshakes 6
 
 ## API
 
-`POST /api/analyses` (multipart `pcap`, optional `keys`) · `POST /api/logs` (multipart `log`, a strongSwan daemon log) · `GET /api/ingest/status` · `POST /api/samples/{name}/analyze` · `GET /api/analyses/{id}` (status + stage) ·
+`POST /api/analyses` (multipart `pcap`, optional `keys`) · `POST /api/logs` (multipart `log`, a strongSwan daemon log) · `POST /api/configs` (multipart `config`, an OpenVPN or WireGuard config) · `GET /api/ingest/status` · `POST /api/samples/{name}/analyze` · `GET /api/analyses/{id}` (status + stage) ·
 `…/tunnels` · `…/tunnels/{tid}` (SA detail, findings, risk, SHAP) · `…/remediation` · `…/report.pdf` · `…/report.html` (self-contained, printable; `?download=1` saves it) · `…/export.json` · `…/export.syslog` ·
 `GET /api/compare?before={id}&after={id}` (risk change, rules fixed/new/remaining, tunnels matched by peer pair) ·
 `GET /api/metrics` · `GET /api/policy` (rules with description, sources, ATT&CK and fix; algorithm tiers; risk formula) · `GET /api/health`. Interactive docs at `/docs`.
@@ -170,6 +193,6 @@ The **Compare** page in the UI uses that endpoint: pick a capture from before a 
 * PyShark/TShark not used; PyTorch autoencoder not adopted (scikit-learn experiment in `docs/AUTOENCODER.md`); IKEv1 phase-2 and keyless IKEv2 child SAs not observable without keys (IKEv1 Quick Mode needs a supplied key table; none was produced from the lab yet).
 * IKEv2 NAT-T is handled (marker, UDP-encapsulated ESP) but only exercised lightly; IPv6 decoding is minimal; AH is counted, not analysed in depth.
 * One capture per analysis, 256 MB default cap (configurable). Optional shared-key auth with a read-only role, but no per-user accounts, audit log or RBAC.
-* WireGuard/OpenVPN: **detection only**. The results page lists them as "other VPN traffic seen, not analysed" (WireGuard by its fixed handshake sizes, OpenVPN by UDP/1194 plus a hard-reset opcode, so OpenVPN on another port is missed). There is no security assessment of either: WireGuard has no cipher negotiation to audit, and OpenVPN's ciphers are negotiated inside TLS.
+* WireGuard/OpenVPN: assessed from captures and config files (see the section above for what a capture cannot show); OpenVPN over TCP and OpenVPN on UDP 500/4500 are not parsed.
 * Risk weights and bands are judgment calls, not calibrated against incident data.
 * The UI was exercised in headless Edge against the real API (upload → results → detail → evaluation) with no failed requests; its only automated frontend test is the browser smoke test above (no component or unit tests).

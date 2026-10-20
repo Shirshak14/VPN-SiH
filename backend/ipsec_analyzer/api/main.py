@@ -17,6 +17,7 @@ from ..reports.html import build_html
 from ..reports.pdf import build_pdf
 from ..reports.summary import remediation_plan
 from ..scoring import FORMULA
+from ..vpn import config as vpn_config
 from ..ingest.charon import looks_like_charon
 from . import accounts, auth, gallery, live, service
 from .compare import compare
@@ -30,10 +31,21 @@ PCAP_MAGICS = {b"\xd4\xc3\xb2\xa1", b"\xa1\xb2\xc3\xd4", b"\x4d\x3c\xb2\xa1", b"
 CAPTURES = DATA_DIR / "captures"
 PUBLIC = DATA_DIR / "public"
 LOGS = DATA_DIR / "logs"
+CONFIGS = DATA_DIR / "configs"
+VPN_CAPTURES = CAPTURES / "vpn"
 LOG_SAMPLES = {
     "strongswan_gateway.log": "Hand-written strongSwan gateway log (syslog format): six IKE SAs - compliant, weak suite chosen, downgrade retry, IKEv1 aggressive PSK, auth failure",
     "strongswan_initiator_filelog.log": "Hand-written strongSwan initiator log (filelog format): handshake retransmits, then a compliant tunnel",
 }
+
+CONFIG_SAMPLES = {
+    "openvpn_legacy_client.ovpn": "Hand-written OpenVPN client profile of the kind copied from 2016-era tutorials: Blowfish, compression, no server verification",
+    "openvpn_permissive_server.conf": "Hand-written OpenVPN server that grew by copy-paste: TLS 1.0, MD5, no client certificates, no CRL",
+    "openvpn_hardened_server.conf": "Hand-written hardened OpenVPN 2.6 server: tls-crypt-v2, AEAD ciphers, TLS 1.2+, CRL",
+    "wireguard_site_gateway.conf": "Hand-written WireGuard site gateway with three peers: one has a pre-shared key, one may claim any address",
+    "wireguard_hardened_client.conf": "Hand-written WireGuard client with a pre-shared key and narrow AllowedIPs",
+}
+VPN_SAMPLES = ("ovpn_tls13_tlscrypt", "ovpn_tls12_cbc_sha1", "ovpn_tls10_legacy", "ovpn_weak_cert", "ovpn_unanswered", "wg_rekey", "wg_unanswered")
 
 app = FastAPI(title="IPsec VPN Analyzer", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -127,6 +139,16 @@ def _samples() -> dict[str, dict[str, Any]]:
     for lf, desc in LOG_SAMPLES.items():
         if (LOGS / lf).exists():
             out[lf] = {"name": lf, "provenance": "sample-log", "input": "log", "pcap": LOGS / lf, "keys": None, "description": desc}
+    vm = VPN_CAPTURES / "manifest.json"
+    if vm.exists():
+        vpn = json.loads(vm.read_text())
+        for n in VPN_SAMPLES:
+            if n in vpn and (VPN_CAPTURES / vpn[n]["file"]).exists():
+                out[n] = {"name": n, "provenance": "real-lab", "pcap": VPN_CAPTURES / vpn[n]["file"], "keys": None,
+                          "description": f"Real {vpn[n]['protocol']} {vpn[n]['version']} traffic from the lab. Scenario: {vpn[n]['description']}"}
+    for cf, desc in CONFIG_SAMPLES.items():
+        if (CONFIGS / cf).exists():
+            out[cf] = {"name": cf, "provenance": "sample-config", "input": "config", "pcap": CONFIGS / cf, "keys": None, "description": desc}
     pm = PUBLIC / "manifest.json"
     if pm.exists():
         man = json.loads(pm.read_text())
@@ -151,12 +173,21 @@ def samples() -> list[dict[str, Any]]:
 def policy() -> dict[str, Any]:
     p = service.get_engine().policy
     cat, rems = p.raw["mitre_catalog"], p.raw["remediations"]
+    vp = service.get_vpn_engine().pack
+    vcat, vrems = vp["mitre_catalog"], vp["remediations"]
     return {"name": p.name, "thresholds": p.thresholds, "tiers": p.raw["tiers"], "severity_weight": p.raw["severity_weight"],
             "risk": p.raw["risk"], "formula": FORMULA,
             "rules": [{k: r.get(k) for k in ("id", "title", "severity", "severity_by_tier", "refs", "mitre", "description")}
                       | {"mitre_detail": [{"id": m, **cat[m]} for m in r.get("mitre", [])],
                          "remediation": {"id": r["remediation"], "title": rems[r["remediation"]]["title"]}}
-                      for r in p.rules]}
+                      for r in p.rules],
+            "other_vpn": {
+                "name": f"{vp['policy']['name']} v{vp['policy']['version']}", "thresholds": vp["thresholds"],
+                "rules": [{k: r.get(k) for k in ("id", "title", "severity", "refs", "mitre", "description", "protocol", "source")}
+                          | {"severity_by_tier": r.get("severity_by_key"),  # same shape the UI already draws: "if <outcome>"
+                             "mitre_detail": [{"id": m, **vcat[m]} for m in r.get("mitre", [])],
+                             "remediation": {"id": r["remediation"], "title": vrems[r["remediation"]]["title"]}}
+                          for r in vp["rules"]]}}
 
 
 # ------------------------------------------------------------------ analyses
@@ -230,6 +261,26 @@ async def create_log_analysis(request: Request, bg: BackgroundTasks, log: Upload
     return _analysis_dict(a)
 
 
+@app.post("/api/configs", status_code=202)
+async def create_config_analysis(request: Request, bg: BackgroundTasks, config: UploadFile = File(...), s: Session = Depends(db),
+                                 user: User | None = Depends(accounts.current_user)) -> dict[str, Any]:
+    """Analyse an OpenVPN (.ovpn/.conf) or WireGuard (wg0.conf) configuration file. Secrets are removed before anything is stored."""
+    blob = await config.read(vpn_config.MAX_BYTES + 1)
+    if len(blob) > vpn_config.MAX_BYTES:
+        raise HTTPException(413, "configuration file larger than 1 MB")
+    text = blob.decode("utf-8", errors="replace")
+    if vpn_config.detect(text) is None:
+        raise HTTPException(400, "not an OpenVPN or WireGuard configuration (expected directives like 'remote', 'cipher', 'tls-crypt', or a WireGuard [Interface] section)")
+    a = Analysis(filename=(config.filename or "config")[:255], provenance="user-upload", has_keys=0, owner_id=user.id if user else None)
+    s.add(a)
+    s.commit()
+    d = DATA_DIR / "uploads" / str(a.id)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "config.txt").write_text(vpn_config.redact(text), encoding="utf-8")  # private keys and inline secrets never reach the disk
+    bg.add_task(service.run_analysis, a.id, d / "config.txt", None, "config")
+    return _analysis_dict(a)
+
+
 @app.get("/api/ingest/status")
 def ingest_status() -> dict[str, Any]:
     """What the watched folder and the syslog listener are doing (both are off unless configured by environment)."""
@@ -287,7 +338,7 @@ def list_tunnels(aid: int, s: Session = Depends(db), user: User | None = Depends
     out = []
     for p in _tunnels(s, aid):
         t = p["tunnel"]
-        out.append({"id": t["id"], "initiator": t["initiator"], "responder": t["responder"], "ike_version": t["ike_version"],
+        out.append({"id": t["id"], "initiator": t["initiator"], "responder": t["responder"], "ike_version": t["ike_version"], "protocol": t.get("protocol", "IPsec"),
                     "exchange_mode": t["exchange_mode"], "status": t["status"], "chosen": t["chosen"], "decrypted": t["decrypted"],
                     "risk": p["risk"], "anomaly_score": (p["anomaly"] or {}).get("score"),
                     "violations": [{"rule_id": f["rule_id"], "severity": f["severity"], "mitre": [m["id"] for m in f["mitre"]]}

@@ -186,3 +186,4 @@ class ParsedCapture:
     ike: list[IkeMessage]
     esp_flows: list[EspFlowStats]
     stats: CaptureStats
+    vpn_tunnels: list = field(default_factory=list)  # OpenVPN / WireGuard sessions (ipsec_analyzer.vpn.VpnTunnel)
