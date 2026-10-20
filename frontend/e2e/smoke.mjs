@@ -40,7 +40,9 @@ try { await fetch(BASE + "/api/health"); } catch { console.error(`App not reacha
 
 const profile = mkdtempSync(path.join(tmpdir(), "ipsec-smoke-"));
 const asRoot = process.getuid?.() === 0;  // Chrome refuses to start its sandbox as root (containers); a throwaway profile is fine without it
-const chrome = spawn(browser, ["--headless=new", "--disable-gpu", ...(asRoot ? ["--no-sandbox"] : []), "--remote-debugging-port=0", "--user-data-dir=" + profile, "--window-size=1366,900", "about:blank"], { stdio: "ignore" });
+const chrome = spawn(browser, ["--headless=new", "--disable-gpu", ...(asRoot ? ["--no-sandbox"] : []), "--remote-debugging-port=0", "--user-data-dir=" + profile, "--window-size=1366,900", "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
+let chromeErr = "";
+chrome.stderr.on("data", (d) => { chromeErr = (chromeErr + d).slice(-2000); });
 const created = [];
 let ws, failures = 0;
 const problems = [];
@@ -55,9 +57,10 @@ async function cleanup() {
 
 try {
   let port;
-  for (let i = 0; i < 80 && !port; i++) {
+  for (let i = 0; i < 240 && !port; i++) {  // 60 s: a cold Chrome start on a busy CI runner can take a while
     try { port = readFileSync(path.join(profile, "DevToolsActivePort"), "utf8").split("\n")[0].trim(); } catch { await sleep(250); }
   }
+  if (!port) throw new Error("Chrome did not expose its DevTools port. Chrome said: " + (chromeErr || "(nothing)"));
   const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
   ws = new WebSocket(targets.find((t) => t.type === "page").webSocketDebuggerUrl);
   await new Promise((r) => (ws.onopen = r));
@@ -250,7 +253,50 @@ try {
   check("scenario family table is complete and in order", JSON.stringify(gotFam) === JSON.stringify(wantFam), `${gotFam.length}/${wantFam.length} rows`);
   check("Evaluation page does not overflow the viewport", await run(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
 
-  // ---- 6. printable report: renders in the browser, lists every tunnel, hides its toolbar when printing
+  // ---- 6. accounts: sign up, private saved history, persistence across sign-out/in, rename, password change, delete
+  const typeInto = async (id, text) => { await run((i) => { const e = document.getElementById(i); e.focus(); e.select(); }, id); await send("Input.insertText", { text }); };
+  const submitForm = (label) => run((l) => document.querySelector(`form[aria-label="${l}"] button:not([type=button])`).click(), label);
+  const email = `smoke-${Date.now()}@example.com`;
+  const pw = "smoke-" + Math.random().toString(36).slice(2) + "-A1";
+  await nav(BASE + "/#/account");
+  check("Account page offers sign in", await waitFor(() => !!document.querySelector('form[aria-label="Sign in to your account"]')));
+  await run(() => [...document.querySelectorAll("form .linklike")].find((b) => b.textContent === "Create an account").click());
+  await typeInto("acct-email", email); await typeInto("acct-pw", "short");
+  await submitForm("Create account");
+  check("a too-short password is rejected with a visible error", await waitFor(() => !!document.querySelector("form [role=alert]")) || await run(() => !document.getElementById("acct-pw").checkValidity()));
+  await typeInto("acct-pw", pw); await submitForm("Create account");
+  check("registering lands on the (empty) saved history", await waitFor(() => location.hash === "#/history" && document.body.innerText.includes("No saved analyses yet")), await hash());
+  check("the top bar shows the signed-in account", await run((e) => document.querySelector(".acct-link")?.textContent === e, email));
+  const hadBefore = (await api("/api/analyses")).length;
+  await nav(BASE + "/#/");
+  await waitFor(() => document.querySelectorAll(".gal-card button").length > 0);
+  await run(() => document.querySelector(".gal-card button").click());
+  check("analysing while signed in works", await waitFor(() => /^#\/a\/\d+$/.test(location.hash) && !!document.querySelector(".res-summary"), [], 40000), await hash());
+  await nav(BASE + "/#/history");
+  check("the analysis appears in saved history, marked private", await waitFor(() => document.querySelectorAll("tbody tr").length === 1));
+  await run(() => document.querySelector(".name-btn").click());
+  await send("Input.insertText", { text: "smoke test run" });
+  await run(() => document.querySelector(".name-input").blur());
+  check("renaming a saved analysis sticks", await waitFor(() => document.querySelector(".name-btn")?.textContent === "smoke test run"));
+  await run(() => [...document.querySelectorAll(".topbar button")].find((b) => b.textContent === "Sign out")?.click());  // API-key mode only
+  await run(() => document.querySelector(".acct-link").click());
+  await run(() => [...document.querySelectorAll("button")].find((b) => b.textContent === "Sign out").click());
+  check("signing out hides the private history", await waitFor(() => document.querySelector(".acct-link")?.textContent === "Sign in"));
+  await nav(BASE + "/#/history");
+  check("History asks anonymous visitors to sign in", await waitFor(() => document.body.innerText.includes("Sign in to keep your analyses private")));
+  await nav(BASE + "/#/account");
+  await waitFor(() => !!document.getElementById("acct-email"));
+  await typeInto("acct-email", email); await typeInto("acct-pw", "wrong-password-1"); await submitForm("Sign in to your account");
+  check("a wrong password shows an error", await waitFor(() => !!document.querySelector("form [role=alert]")));
+  for (let i = problems.length - 1; i >= 0; i--) if (problems[i].includes("401")) problems.splice(i, 1);  // the deliberate failed sign-in
+  await typeInto("acct-pw", pw); await submitForm("Sign in to your account");
+  check("signing back in restores the saved analysis with its name", await waitFor(() => location.hash === "#/history" && document.querySelector(".name-btn")?.textContent === "smoke test run"), await hash());
+  await nav(BASE + "/#/account");
+  await waitFor(() => !!document.getElementById("pw-del") || [...document.querySelectorAll("button")].some((b) => b.textContent.startsWith("Delete my account")));
+  await run(() => [...document.querySelectorAll("button")].find((b) => b.textContent.startsWith("Delete my account")).click());
+  await typeInto("pw-del", pw); await submitForm("Delete account");
+  check("deleting the account signs out and erases the saved analysis", await waitFor(() => document.querySelector(".acct-link")?.textContent === "Sign in") && (await api("/api/analyses")).length === hadBefore);
+  // ---- 7. printable report: renders in the browser, lists every tunnel, hides its toolbar when printing
   await nav(`${BASE}/api/analyses/${aid}/report.html`);
   check("report page renders with its title and one section per tunnel", await waitFor((n) => document.querySelector("h1")?.textContent === "IPsec VPN Security Assessment" && document.querySelectorAll("section.tunnel").length === n, [T.length]));
   check("report summary and remediation match the API", await run((top, n) => Number(document.body.innerText.match(/([\d.]+)\/100/)?.[1]) === top && [...document.querySelectorAll(".fix")].length === n, top, rem.length), `top=${top} rem=${rem.length}`);

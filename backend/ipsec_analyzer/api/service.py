@@ -12,7 +12,8 @@ from sqlalchemy import delete
 from ..ml.model import DEFAULT_MODEL, AnomalyModel
 from ..pipeline import AnalysisResult, TunnelResult, analyze, analyze_log, analyze_vpn_config
 from ..rules import RuleEngine
-from .db import DATA_DIR, Analysis, SessionLocal, TunnelRow
+from . import db as dbm
+from .db import DATA_DIR
 
 _engine: RuleEngine | None = None
 _vpn_engine: Any = None
@@ -105,8 +106,8 @@ def run_analysis(analysis_id: int, pcap: Path, keys: Path | None, kind: str = "p
 def _run_analysis(analysis_id: int, pcap: Path, keys: Path | None, kind: str = "pcap") -> None:
     """Updates stage/status so the UI can show progress."""
     def stage(name: str) -> None:
-        with SessionLocal() as s:
-            a = s.get(Analysis, analysis_id)
+        with dbm.SessionLocal() as s:
+            a = s.get(dbm.Analysis, analysis_id)
             a.status, a.stage = "running", name
             s.commit()
 
@@ -117,18 +118,18 @@ def _run_analysis(analysis_id: int, pcap: Path, keys: Path | None, kind: str = "
             res = analyze_vpn_config(pcap, get_engine(), progress=stage)
         else:
             res = analyze(pcap, keys, get_engine(), get_model(), progress=stage)
-        with SessionLocal() as s:
-            a = s.get(Analysis, analysis_id)
-            s.execute(delete(TunnelRow).where(TunnelRow.analysis_id == analysis_id))
+        with dbm.SessionLocal() as s:
+            a = s.get(dbm.Analysis, analysis_id)
+            s.execute(delete(dbm.TunnelRow).where(dbm.TunnelRow.analysis_id == analysis_id))
             a.error = None
             a.summary, a.seconds, a.status, a.stage = summarize(res), round(res.seconds, 3), "done", "done"
             for r in res.everything:
-                s.add(TunnelRow(analysis_id=analysis_id, tunnel_id=r.tunnel.id, risk=r.risk.score, band=r.risk.band,
+                s.add(dbm.TunnelRow(analysis_id=analysis_id, tunnel_id=r.tunnel.id, risk=r.risk.score, band=r.risk.band,
                                 payload=tunnel_payload(r)))
             s.commit()
     except Exception as e:  # surface a readable error in the UI, keep the trace in the server log
         traceback.print_exc()
-        with SessionLocal() as s:
-            a = s.get(Analysis, analysis_id)
+        with dbm.SessionLocal() as s:
+            a = s.get(dbm.Analysis, analysis_id)
             a.status, a.stage, a.error = "failed", "failed", f"{type(e).__name__}: {e}"[:990]
             s.commit()

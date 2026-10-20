@@ -13,6 +13,17 @@ export interface Analysis {
   seconds: number | null;
   summary: Json;
   has_keys: boolean;
+  label: string | null;
+  private: boolean;  // owned by a signed-in user (vs the shared demo space)
+}
+export interface User {
+  id: number;
+  email: string;
+  created_at: string;
+}
+export interface AccountState {
+  registration_open: boolean;
+  user: User | null;
 }
 export interface SamplePreview {
   tunnels: number;
@@ -59,11 +70,19 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
   return (r.status === 204 ? undefined : await r.json()) as T;
 }
 
+const jsonInit = (method: string, body: unknown): RequestInit => ({ method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
 export const api = {
   auth: () => req<AuthState>("/api/auth"),
-  login: (key: string) =>
-    req<{ role: string }>("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }) }),
+  login: (key: string) => req<{ role: string }>("/api/login", jsonInit("POST", { key })),
   logout: () => req<{ ok: boolean }>("/api/logout", { method: "POST" }),
+  account: () => req<AccountState>("/api/account"),
+  register: (email: string, password: string) => req<{ user: User }>("/api/account/register", jsonInit("POST", { email, password })),
+  signIn: (email: string, password: string) => req<{ user: User }>("/api/account/login", jsonInit("POST", { email, password })),
+  signOut: () => req<{ ok: boolean }>("/api/account/logout", { method: "POST" }),
+  changePassword: (current: string, next: string) => req<{ ok: boolean }>("/api/account/password", jsonInit("POST", { current, new: next })),
+  deleteAccount: (password: string) => req<void>("/api/account", jsonInit("DELETE", { password })),
+  rename: (id: number, label: string) => req<Analysis>(`/api/analyses/${id}`, jsonInit("PATCH", { label })),
   samples: () => req<Sample[]>("/api/samples"),
   analyses: () => req<Analysis[]>("/api/analyses"),
   analysis: (id: number) => req<Analysis>(`/api/analyses/${id}`),

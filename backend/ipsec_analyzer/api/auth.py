@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse
 COOKIE = "ipsec_session"
 COOKIE_MAX_AGE = 8 * 3600
 OPEN_PATHS = {"/api/health", "/api/login", "/api/logout", "/api/auth"}
+READONLY_OK = {"/api/account/login", "/api/account/logout"}  # a read-only key may still sign in to its own account
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 _MAX_FAILURES, _WINDOW_S = 5, 60.0
 
@@ -106,7 +107,7 @@ def install(app: FastAPI) -> None:
         role = role_of(request)
         if role is None:
             return JSONResponse({"detail": "authentication required"}, status_code=401)
-        if role == "readonly" and request.method not in _SAFE_METHODS:
+        if role == "readonly" and request.method not in _SAFE_METHODS and path not in READONLY_OK:
             return JSONResponse({"detail": "this key is read-only"}, status_code=403)
         return await call_next(request)
 

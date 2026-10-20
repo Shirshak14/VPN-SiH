@@ -19,9 +19,9 @@ from ..reports.summary import remediation_plan
 from ..scoring import FORMULA
 from ..vpn import config as vpn_config
 from ..ingest.charon import looks_like_charon
-from . import auth, gallery, live, service
+from . import accounts, auth, gallery, live, service
 from .compare import compare
-from .db import DATA_DIR, Analysis, SessionLocal, TunnelRow, init_db
+from .db import DATA_DIR, Analysis, TunnelRow, User, init_db
 
 # Uploads stream to disk in 1 MiB chunks and the parser keeps only per-flow ESP counters, so the cap is a disk/time
 # limit rather than a memory one (measured: a 244 MB / 2 M-packet capture peaks at ~51 MB RSS). Override with MAX_UPLOAD_MB.
@@ -50,6 +50,7 @@ VPN_SAMPLES = ("ovpn_tls13_tlscrypt", "ovpn_tls12_cbc_sha1", "ovpn_tls10_legacy"
 app = FastAPI(title="IPsec VPN Analyzer", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 auth.install(app)  # no-op until API_KEY is set
+app.include_router(accounts.router)
 
 
 def _warm() -> None:
@@ -70,20 +71,19 @@ def _shutdown() -> None:
     live.stop()
 
 
-def db() -> Session:
-    with SessionLocal() as s:
-        yield s
+db = accounts.get_session  # one session per request, shared with the current_user dependency
 
 
 def _analysis_dict(a: Analysis) -> dict[str, Any]:
     return {"id": a.id, "filename": a.filename, "provenance": a.provenance, "status": a.status, "stage": a.stage,
             "error": a.error, "created_at": a.created_at.isoformat(), "seconds": a.seconds, "summary": a.summary,
-            "has_keys": bool(a.has_keys)}
+            "has_keys": bool(a.has_keys), "label": a.label, "private": a.owner_id is not None}
 
 
-def _get(s: Session, aid: int) -> Analysis:
+def _get(s: Session, aid: int, user: User | None) -> Analysis:
+    """Anonymous analyses are the shared demo space; an owned one is invisible (404, not 403) to everybody else."""
     a = s.get(Analysis, aid)
-    if a is None:
+    if a is None or (a.owner_id is not None and (user is None or a.owner_id != user.id)):
         raise HTTPException(404, "analysis not found")
     return a
 
@@ -93,8 +93,8 @@ def _tunnels(s: Session, aid: int) -> list[dict[str, Any]]:
     return [r.payload for r in rows]
 
 
-def _done(s: Session, aid: int) -> Analysis:
-    a = _get(s, aid)
+def _done(s: Session, aid: int, user: User | None) -> Analysis:
+    a = _get(s, aid, user)
     if a.status != "done":
         raise HTTPException(409, f"analysis is {a.status}")
     return a
@@ -193,14 +193,15 @@ def policy() -> dict[str, Any]:
 # ------------------------------------------------------------------ analyses
 @app.post("/api/analyses", status_code=202)
 async def create_analysis(request: Request, bg: BackgroundTasks, pcap: UploadFile = File(...), keys: UploadFile | None = File(None),
-                          s: Session = Depends(db)) -> dict[str, Any]:
+                          s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> dict[str, Any]:
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > MAX_UPLOAD + MAX_KEYS_UPLOAD + 65536:  # refuse before reading the body
         raise HTTPException(413, f"request exceeds the {MAX_UPLOAD // 2**20} MB upload limit (set MAX_UPLOAD_MB to change it)")
     head = await pcap.read(4)
     if head not in PCAP_MAGICS:
         raise HTTPException(400, "not a PCAP/PCAPNG file (bad magic bytes)")
-    a = Analysis(filename=(pcap.filename or "upload.pcap")[:255], provenance="user-upload", has_keys=int(keys is not None))
+    a = Analysis(filename=(pcap.filename or "upload.pcap")[:255], provenance="user-upload", has_keys=int(keys is not None),
+                 owner_id=user.id if user else None)
     s.add(a)
     s.commit()
     d = DATA_DIR / "uploads" / str(a.id)
@@ -231,7 +232,8 @@ async def create_analysis(request: Request, bg: BackgroundTasks, pcap: UploadFil
 
 
 @app.post("/api/logs", status_code=202)
-async def create_log_analysis(request: Request, bg: BackgroundTasks, log: UploadFile = File(...), s: Session = Depends(db)) -> dict[str, Any]:
+async def create_log_analysis(request: Request, bg: BackgroundTasks, log: UploadFile = File(...), s: Session = Depends(db),
+                              user: User | None = Depends(accounts.current_user)) -> dict[str, Any]:
     """Analyse a strongSwan daemon log (plain file, syslog or journald text) instead of a packet capture."""
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > MAX_UPLOAD + 65536:
@@ -239,7 +241,7 @@ async def create_log_analysis(request: Request, bg: BackgroundTasks, log: Upload
     head = await log.read(65536)
     if not looks_like_charon(head):
         raise HTTPException(400, "no strongSwan charon log lines found (expected lines like '12[IKE] ...'); only strongSwan logs are read")
-    a = Analysis(filename=(log.filename or "charon.log")[:255], provenance="user-upload", has_keys=0)
+    a = Analysis(filename=(log.filename or "charon.log")[:255], provenance="user-upload", has_keys=0, owner_id=user.id if user else None)
     s.add(a)
     s.commit()
     d = DATA_DIR / "uploads" / str(a.id)
@@ -260,7 +262,8 @@ async def create_log_analysis(request: Request, bg: BackgroundTasks, log: Upload
 
 
 @app.post("/api/configs", status_code=202)
-async def create_config_analysis(request: Request, bg: BackgroundTasks, config: UploadFile = File(...), s: Session = Depends(db)) -> dict[str, Any]:
+async def create_config_analysis(request: Request, bg: BackgroundTasks, config: UploadFile = File(...), s: Session = Depends(db),
+                                 user: User | None = Depends(accounts.current_user)) -> dict[str, Any]:
     """Analyse an OpenVPN (.ovpn/.conf) or WireGuard (wg0.conf) configuration file. Secrets are removed before anything is stored."""
     blob = await config.read(vpn_config.MAX_BYTES + 1)
     if len(blob) > vpn_config.MAX_BYTES:
@@ -268,7 +271,7 @@ async def create_config_analysis(request: Request, bg: BackgroundTasks, config: 
     text = blob.decode("utf-8", errors="replace")
     if vpn_config.detect(text) is None:
         raise HTTPException(400, "not an OpenVPN or WireGuard configuration (expected directives like 'remote', 'cipher', 'tls-crypt', or a WireGuard [Interface] section)")
-    a = Analysis(filename=(config.filename or "config")[:255], provenance="user-upload", has_keys=0)
+    a = Analysis(filename=(config.filename or "config")[:255], provenance="user-upload", has_keys=0, owner_id=user.id if user else None)
     s.add(a)
     s.commit()
     d = DATA_DIR / "uploads" / str(a.id)
@@ -285,11 +288,11 @@ def ingest_status() -> dict[str, Any]:
 
 
 @app.post("/api/samples/{name}/analyze", status_code=202)
-def analyze_sample(name: str, bg: BackgroundTasks, s: Session = Depends(db)) -> dict[str, Any]:
+def analyze_sample(name: str, bg: BackgroundTasks, s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> dict[str, Any]:
     smp = _samples().get(name)
     if smp is None:
         raise HTTPException(404, "unknown sample")
-    a = Analysis(filename=name, provenance=smp["provenance"], has_keys=int(smp["keys"] is not None))
+    a = Analysis(filename=name, provenance=smp["provenance"], has_keys=int(smp["keys"] is not None), owner_id=user.id if user else None)
     s.add(a)
     s.commit()
     bg.add_task(service.run_analysis, a.id, smp["pcap"], smp["keys"], smp.get("input", "pcap"))
@@ -297,26 +300,41 @@ def analyze_sample(name: str, bg: BackgroundTasks, s: Session = Depends(db)) -> 
 
 
 @app.get("/api/analyses")
-def list_analyses(s: Session = Depends(db)) -> list[dict[str, Any]]:
-    return [_analysis_dict(a) for a in s.scalars(select(Analysis).order_by(Analysis.id.desc()).limit(50))]
+def list_analyses(s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> list[dict[str, Any]]:
+    """Signed in: your saved analyses. Anonymous: the shared demo space."""
+    where = Analysis.owner_id == user.id if user else Analysis.owner_id.is_(None)
+    return [_analysis_dict(a) for a in s.scalars(select(Analysis).where(where).order_by(Analysis.id.desc()).limit(200 if user else 50))]
 
 
 @app.get("/api/analyses/{aid}")
-def get_analysis(aid: int, s: Session = Depends(db)) -> dict[str, Any]:
-    return _analysis_dict(_get(s, aid))
+def get_analysis(aid: int, s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> dict[str, Any]:
+    return _analysis_dict(_get(s, aid, user))
+
+
+@app.patch("/api/analyses/{aid}")
+async def rename_analysis(aid: int, request: Request, s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> dict[str, Any]:
+    """Give a saved analysis your own name (e.g. "gateway-2 after the IKE hardening"). Owners only."""
+    a = _get(s, aid, user)
+    if a.owner_id is None:
+        raise HTTPException(403, "sign in to save and name analyses")
+    body = await request.json()
+    label = str(body.get("label", "")).strip()[:120] if isinstance(body, dict) else ""
+    a.label = label or None
+    s.commit()
+    return _analysis_dict(a)
 
 
 @app.delete("/api/analyses/{aid}", status_code=204)
-def delete_analysis(aid: int, s: Session = Depends(db)) -> Response:
-    s.delete(_get(s, aid))
+def delete_analysis(aid: int, s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> Response:
+    s.delete(_get(s, aid, user))
     s.commit()
     shutil.rmtree(DATA_DIR / "uploads" / str(aid), ignore_errors=True)
     return Response(status_code=204)
 
 
 @app.get("/api/analyses/{aid}/tunnels")
-def list_tunnels(aid: int, s: Session = Depends(db)) -> list[dict[str, Any]]:
-    _done(s, aid)
+def list_tunnels(aid: int, s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> list[dict[str, Any]]:
+    _done(s, aid, user)
     out = []
     for p in _tunnels(s, aid):
         t = p["tunnel"]
@@ -330,8 +348,8 @@ def list_tunnels(aid: int, s: Session = Depends(db)) -> list[dict[str, Any]]:
 
 
 @app.get("/api/analyses/{aid}/tunnels/{tid}")
-def get_tunnel(aid: int, tid: str, s: Session = Depends(db)) -> dict[str, Any]:
-    _done(s, aid)
+def get_tunnel(aid: int, tid: str, s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> dict[str, Any]:
+    _done(s, aid, user)
     row = s.scalars(select(TunnelRow).where(TunnelRow.analysis_id == aid, TunnelRow.tunnel_id == tid)).first()
     if row is None:
         raise HTTPException(404, "tunnel not found")
@@ -339,48 +357,48 @@ def get_tunnel(aid: int, tid: str, s: Session = Depends(db)) -> dict[str, Any]:
 
 
 @app.get("/api/analyses/{aid}/remediation")
-def remediation(aid: int, s: Session = Depends(db)) -> list[dict[str, Any]]:
+def remediation(aid: int, s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> list[dict[str, Any]]:
     """Consolidated remediation plan: each remediation once, with the rules/tunnels that need it."""
-    _done(s, aid)
+    _done(s, aid, user)
     return remediation_plan(_tunnels(s, aid))
 
 
 @app.get("/api/analyses/{aid}/report.pdf")
-def report_pdf(aid: int, s: Session = Depends(db)) -> Response:
-    a = _done(s, aid)
+def report_pdf(aid: int, s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> Response:
+    a = _done(s, aid, user)
     pdf = build_pdf(_analysis_dict(a), _tunnels(s, aid))
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="ipsec-report-{aid}.pdf"'})
 
 
 @app.get("/api/analyses/{aid}/report.html")
-def report_html(aid: int, download: bool = False, s: Session = Depends(db)) -> Response:
+def report_html(aid: int, download: bool = False, s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> Response:
     """Self-contained printable report. Opens in the browser by default; ?download=1 saves it as a file to share."""
-    a = _done(s, aid)
+    a = _done(s, aid, user)
     headers = {"Content-Disposition": f'attachment; filename="ipsec-report-{aid}.html"'} if download else {}
     headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'"
     return Response(build_html(_analysis_dict(a), _tunnels(s, aid)), media_type="text/html; charset=utf-8", headers=headers)
 
 
 @app.get("/api/analyses/{aid}/export.json")
-def export_json(aid: int, s: Session = Depends(db)) -> Response:
-    a = _done(s, aid)
+def export_json(aid: int, s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> Response:
+    a = _done(s, aid, user)
     return Response(json.dumps(to_json(_analysis_dict(a), _tunnels(s, aid)), indent=1), media_type="application/json",
                     headers={"Content-Disposition": f'attachment; filename="ipsec-analysis-{aid}.json"'})
 
 
 @app.get("/api/analyses/{aid}/export.syslog")
-def export_syslog(aid: int, s: Session = Depends(db)) -> Response:
-    a = _done(s, aid)
+def export_syslog(aid: int, s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> Response:
+    a = _done(s, aid, user)
     return Response(to_syslog(_analysis_dict(a), _tunnels(s, aid)), media_type="text/plain",
                     headers={"Content-Disposition": f'attachment; filename="ipsec-analysis-{aid}.syslog"'})
 
 
 @app.get("/api/compare")
-def compare_analyses(before: int, after: int, s: Session = Depends(db)) -> dict[str, Any]:
+def compare_analyses(before: int, after: int, s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> dict[str, Any]:
     """Before/after diff of two finished analyses: risk change, rules fixed/new/remaining, tunnels matched by peer pair."""
     if before == after:
         raise HTTPException(400, "pick two different analyses")
-    a, b = _done(s, before), _done(s, after)
+    a, b = _done(s, before, user), _done(s, after, user)
     return {"before_analysis": _analysis_dict(a), "after_analysis": _analysis_dict(b), **compare(_tunnels(s, before), _tunnels(s, after))}
 
 

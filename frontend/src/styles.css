@@ -329,6 +329,20 @@ tbody tr.click:focus-visible { outline: 3px solid var(--focus); outline-offset: 
 @media (max-width: 900px) { .ov-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 560px) { .ov-attack li { grid-template-columns: 70px minmax(0, 1fr) auto; } .ov-attack .ov-bar, .ov-attack li > .badge { display: none; } }
 
+/* ---- accounts & history ---- */
+.acct { max-width: 34rem; margin: 0 auto; }
+.acct-form { margin: 0; max-width: none; }
+.acct-link { margin-left: var(--sp-3); color: var(--text); font-weight: var(--fw-medium); max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: bottom; }
+.acct-link.active { text-decoration: underline; }
+.login .small.muted { margin: 0; }
+.danger { border-color: var(--critical); }
+.danger-btn { background: var(--critical); border-color: var(--critical); color: var(--brand-ink); }
+.danger-btn:hover { background: var(--critical); filter: brightness(1.1); }
+.name-btn { text-align: left; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none; }
+.name-btn:hover { text-decoration: underline; }
+.name-input { padding: var(--sp-1) var(--sp-2); border: 1px solid var(--brand); border-radius: 6px; background: var(--surface); color: inherit; font: inherit; width: 22ch; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.az-note { margin: 0 0 var(--sp-3); }
 /* ---- Sample gallery: one-click demo analyses ---- */
 .gal-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; margin-bottom: var(--sp-4); }
 .gal-head h2 { margin-bottom: var(--sp-1); }
