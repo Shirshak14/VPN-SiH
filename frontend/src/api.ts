@@ -25,11 +25,26 @@ export interface AccountState {
   registration_open: boolean;
   user: User | null;
 }
+export interface SamplePreview {
+  tunnels: number;
+  violations: number;
+  top_score: number | null;
+  top_band: string | null;
+  anomalous: number;
+  rules: { rule_id: string; severity: string }[];
+  rule_count: number;
+}
 export interface Sample {
   name: string;
   provenance: string;
   description: string;
   has_keys: boolean;
+  title: string;
+  story: string;
+  kind: string;
+  order: number;
+  preview: SamplePreview | null;
+  input?: "pcap" | "log";
 }
 
 export interface AuthState {
@@ -84,9 +99,18 @@ export const api = {
     if (keys) f.append("keys", keys);
     return req<Analysis>("/api/analyses", { method: "POST", body: f });
   },
+  uploadLog: (log: File) => {
+    const f = new FormData();
+    f.append("log", log);
+    return req<Analysis>("/api/logs", { method: "POST", body: f });
+  },
+  ingest: () => req<Json>("/api/ingest/status"),
   remove: (id: number) => req<void>(`/api/analyses/${id}`, { method: "DELETE" }),
-  url: (id: number, what: "report.pdf" | "export.json" | "export.syslog") => `/api/analyses/${id}/${what}`,
+  url: (id: number, what: "report.pdf" | "report.html" | "report.html?download=1" | "export.json" | "export.syslog") => `/api/analyses/${id}/${what}`,
 };
 
 export const fmtTs = (t: number, t0: number) => `+${(t - t0).toFixed(3)}s`;
 export const pct = (v: number | null | undefined) => (v == null ? "n/a" : `${(v * 100).toFixed(1)}%`);
+
+/** Packet captures go to /api/analyses; anything else is treated as a strongSwan daemon log. */
+export const isCapture = (name: string) => /\.(pcap|pcapng|cap)$/i.test(name);

@@ -5,6 +5,9 @@ const PROV_LABEL: Record<string, string> = {
   "real-lab": "real · strongSwan lab",
   "real-public": "real · public sample",
   "user-upload": "user upload",
+  "sample-log": "hand-written sample log",
+  "watch-folder": "watched folder",
+  "live-syslog": "live syslog",
 };
 
 export function Sev({ level }: { level: string }) {

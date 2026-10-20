@@ -1,0 +1,76 @@
+Oct 19 09:00:00 gw1 charon-systemd[812]: 00[DMN] Starting IKE charon daemon (strongSwan 5.9.8, Linux 5.15.0, x86_64)
+Oct 19 09:00:10 gw1 charon-systemd[812]: 07[NET] received packet: from 203.0.113.10[500] to 198.51.100.1[500] (300 bytes)
+Oct 19 09:00:10 gw1 charon-systemd[812]: 07[ENC] parsed IKE_SA_INIT request 0 [ SA KE No N(NATD_S_IP) N(NATD_D_IP) N(FRAG_SUP) N(HASH_ALG) N(REDIR_SUP) ]
+Oct 19 09:00:10 gw1 charon-systemd[812]: 07[CFG] looking for an IKE config for 198.51.100.1...203.0.113.10
+Oct 19 09:00:10 gw1 charon-systemd[812]: 07[CFG] found matching ike config: 198.51.100.1...203.0.113.10 with prio 3084
+Oct 19 09:00:10 gw1 charon-systemd[812]: 07[IKE] 203.0.113.10 is initiating an IKE_SA
+Oct 19 09:00:10 gw1 charon-systemd[812]: 07[CFG] <1> selecting proposal:
+Oct 19 09:00:10 gw1 charon-systemd[812]: 07[CFG] <1> received proposals: IKE:AES_GCM_16_256/PRF_HMAC_SHA2_384/ECP_384, IKE:AES_CBC_256/HMAC_SHA2_256_128/PRF_HMAC_SHA2_256/MODP_2048
+Oct 19 09:00:10 gw1 charon-systemd[812]: 07[CFG] <1> configured proposals: IKE:AES_GCM_16_256/PRF_HMAC_SHA2_384/ECP_384
+Oct 19 09:00:10 gw1 charon-systemd[812]: 07[CFG] <1> selected proposal: IKE:AES_GCM_16_256/PRF_HMAC_SHA2_384/ECP_384
+Oct 19 09:00:10 gw1 charon-systemd[812]: 07[ENC] <1> generating IKE_SA_INIT response 0 [ SA KE No N(NATD_S_IP) N(NATD_D_IP) N(FRAG_SUP) N(HASH_ALG) N(CHDLESS_SUP) N(MULT_AUTH) ]
+Oct 19 09:00:11 gw1 charon-systemd[812]: 07[ENC] <1> parsed IKE_AUTH request 1 [ IDi N(INIT_CONTACT) IDr AUTH SA TSi TSr N(MOBIKE_SUP) N(NO_ADD_ADDR) N(EAP_ONLY) ]
+Oct 19 09:00:11 gw1 charon-systemd[812]: 07[IKE] <site-a|1> authentication of 'gw-a.example.net' with pre-shared key successful
+Oct 19 09:00:11 gw1 charon-systemd[812]: 07[IKE] <site-a|1> authentication of 'gw1.example.net' (myself) with pre-shared key
+Oct 19 09:00:11 gw1 charon-systemd[812]: 07[IKE] <site-a|1> IKE_SA site-a[1] established between 198.51.100.1[gw1.example.net]...203.0.113.10[gw-a.example.net]
+Oct 19 09:00:11 gw1 charon-systemd[812]: 07[IKE] <site-a|1> scheduling rekeying in 13745s
+Oct 19 09:00:11 gw1 charon-systemd[812]: 07[IKE] <site-a|1> maximum IKE_SA lifetime 15145s
+Oct 19 09:00:11 gw1 charon-systemd[812]: 07[CFG] <site-a|1> selecting proposal:
+Oct 19 09:00:11 gw1 charon-systemd[812]: 07[CFG] <site-a|1> proposal matches
+Oct 19 09:00:11 gw1 charon-systemd[812]: 07[CFG] <site-a|1> received proposals: ESP:AES_GCM_16_256/NO_EXT_SEQ
+Oct 19 09:00:11 gw1 charon-systemd[812]: 07[CFG] <site-a|1> configured proposals: ESP:AES_GCM_16_256/NO_EXT_SEQ
+Oct 19 09:00:11 gw1 charon-systemd[812]: 07[CFG] <site-a|1> selected proposal: ESP:AES_GCM_16_256/NO_EXT_SEQ
+Oct 19 09:00:11 gw1 charon-systemd[812]: 07[IKE] <site-a|1> CHILD_SA site-a{1} established with SPIs c1e2d3a4_i 5a6b7c8d_o and TS 10.1.0.0/24 === 10.10.0.0/24
+Oct 19 10:00:00 gw1 charon-systemd[812]: 09[CFG] <site-a|1> selected proposal: ESP:AES_GCM_16_256/ECP_384/NO_EXT_SEQ
+Oct 19 10:00:00 gw1 charon-systemd[812]: 09[IKE] <site-a|1> CHILD_SA site-a{2} established with SPIs c9e2d3a5_i 5a6b7c9e_o and TS 10.1.0.0/24 === 10.10.0.0/24
+Oct 19 09:02:00 gw1 charon-systemd[812]: 07[NET] received packet: from 203.0.113.20[500] to 198.51.100.1[500] (300 bytes)
+Oct 19 09:02:00 gw1 charon-systemd[812]: 07[ENC] parsed IKE_SA_INIT request 0 [ SA KE No N(NATD_S_IP) N(NATD_D_IP) N(FRAG_SUP) N(HASH_ALG) N(REDIR_SUP) ]
+Oct 19 09:02:00 gw1 charon-systemd[812]: 07[CFG] looking for an IKE config for 198.51.100.1...203.0.113.20
+Oct 19 09:02:00 gw1 charon-systemd[812]: 07[CFG] found matching ike config: 198.51.100.1...203.0.113.20 with prio 3084
+Oct 19 09:02:00 gw1 charon-systemd[812]: 07[IKE] 203.0.113.20 is initiating an IKE_SA
+Oct 19 09:02:00 gw1 charon-systemd[812]: 07[CFG] <2> selecting proposal:
+Oct 19 09:02:00 gw1 charon-systemd[812]: 07[CFG] <2> received proposals: IKE:AES_CBC_256/HMAC_SHA2_256_128/PRF_HMAC_SHA2_256/MODP_2048, IKE:3DES_CBC/HMAC_SHA1_96/PRF_HMAC_SHA1/MODP_1024
+Oct 19 09:02:00 gw1 charon-systemd[812]: 07[CFG] <2> configured proposals: IKE:AES_GCM_16_256/PRF_HMAC_SHA2_384/ECP_384
+Oct 19 09:02:00 gw1 charon-systemd[812]: 07[CFG] <2> selected proposal: IKE:3DES_CBC/HMAC_SHA1_96/PRF_HMAC_SHA1/MODP_1024
+Oct 19 09:02:00 gw1 charon-systemd[812]: 07[ENC] <2> generating IKE_SA_INIT response 0 [ SA KE No N(NATD_S_IP) N(NATD_D_IP) N(FRAG_SUP) N(HASH_ALG) N(CHDLESS_SUP) N(MULT_AUTH) ]
+Oct 19 09:02:01 gw1 charon-systemd[812]: 08[IKE] <site-b|2> authentication of 'gw-b.example.net' with pre-shared key successful
+Oct 19 09:02:01 gw1 charon-systemd[812]: 08[IKE] <site-b|2> IKE_SA site-b[2] established between 198.51.100.1[gw1.example.net]...203.0.113.20[gw-b.example.net]
+Oct 19 09:02:01 gw1 charon-systemd[812]: 08[CFG] <site-b|2> selected proposal: ESP:3DES_CBC/HMAC_MD5_96/NO_EXT_SEQ
+Oct 19 09:02:01 gw1 charon-systemd[812]: 08[IKE] <site-b|2> CHILD_SA site-b{3} established with SPIs c0aa0001_i 0bb00001_o and TS 10.2.0.0/24 === 10.10.0.0/24
+Oct 19 10:02:01 gw1 charon-systemd[812]: 08[CFG] <site-b|2> selected proposal: ESP:3DES_CBC/HMAC_MD5_96/NO_EXT_SEQ
+Oct 19 10:02:01 gw1 charon-systemd[812]: 08[IKE] <site-b|2> CHILD_SA site-b{4} established with SPIs c0aa0002_i 0bb00002_o and TS 10.2.0.0/24 === 10.10.0.0/24
+Oct 19 09:05:00 gw1 charon-systemd[812]: 10[NET] received packet: from 192.0.2.77[500] to 198.51.100.1[500] (300 bytes)
+Oct 19 09:05:00 gw1 charon-systemd[812]: 10[ENC] parsed IKE_SA_INIT request 0 [ SA KE No N(NATD_S_IP) N(NATD_D_IP) ]
+Oct 19 09:05:00 gw1 charon-systemd[812]: 10[IKE] 192.0.2.77 is initiating an IKE_SA
+Oct 19 09:05:00 gw1 charon-systemd[812]: 10[CFG] <3> received proposals: IKE:AES_CBC_256/HMAC_SHA2_256_128/PRF_HMAC_SHA2_256/MODP_2048
+Oct 19 09:05:00 gw1 charon-systemd[812]: 10[CFG] <3> configured proposals: IKE:3DES_CBC/HMAC_SHA1_96/PRF_HMAC_SHA1/MODP_1024
+Oct 19 09:05:00 gw1 charon-systemd[812]: 10[IKE] <3> received proposals inacceptable
+Oct 19 09:05:00 gw1 charon-systemd[812]: 10[ENC] <3> generating IKE_SA_INIT response 0 [ N(NO_PROP) ]
+Oct 19 09:05:12 gw1 charon-systemd[812]: 10[NET] received packet: from 192.0.2.77[500] to 198.51.100.1[500] (260 bytes)
+Oct 19 09:05:12 gw1 charon-systemd[812]: 10[ENC] parsed IKE_SA_INIT request 0 [ SA KE No N(NATD_S_IP) N(NATD_D_IP) ]
+Oct 19 09:05:12 gw1 charon-systemd[812]: 10[IKE] 192.0.2.77 is initiating an IKE_SA
+Oct 19 09:05:12 gw1 charon-systemd[812]: 10[CFG] <4> received proposals: IKE:3DES_CBC/HMAC_SHA1_96/PRF_HMAC_SHA1/MODP_1024
+Oct 19 09:05:12 gw1 charon-systemd[812]: 10[CFG] <4> configured proposals: IKE:3DES_CBC/HMAC_SHA1_96/PRF_HMAC_SHA1/MODP_1024
+Oct 19 09:05:12 gw1 charon-systemd[812]: 10[CFG] <4> selected proposal: IKE:3DES_CBC/HMAC_SHA1_96/PRF_HMAC_SHA1/MODP_1024
+Oct 19 09:05:12 gw1 charon-systemd[812]: 10[IKE] <site-c|4> authentication of 'gw-c.example.net' with pre-shared key successful
+Oct 19 09:05:12 gw1 charon-systemd[812]: 10[IKE] <site-c|4> IKE_SA site-c[4] established between 198.51.100.1[gw1.example.net]...192.0.2.77[gw-c.example.net]
+Oct 19 09:05:12 gw1 charon-systemd[812]: 10[CFG] <site-c|4> selected proposal: ESP:3DES_CBC/HMAC_SHA1_96/NO_EXT_SEQ
+Oct 19 09:05:12 gw1 charon-systemd[812]: 10[IKE] <site-c|4> CHILD_SA site-c{5} established with SPIs c0cc0001_i 0dd00001_o and TS 10.3.0.0/24 === 10.10.0.0/24
+Oct 19 09:08:20 gw1 charon-systemd[812]: 11[NET] received packet: from 192.0.2.99[500] to 198.51.100.1[500] (400 bytes)
+Oct 19 09:08:20 gw1 charon-systemd[812]: 11[ENC] parsed AGGRESSIVE request 0 [ SA KE No ID V V V V V ]
+Oct 19 09:08:20 gw1 charon-systemd[812]: 11[IKE] 192.0.2.99 is initiating a Aggressive Mode IKE_SA
+Oct 19 09:08:20 gw1 charon-systemd[812]: 11[CFG] <5> received proposals: IKE:3DES_CBC/HMAC_SHA1_96/PRF_HMAC_SHA1/MODP_1024
+Oct 19 09:08:20 gw1 charon-systemd[812]: 11[CFG] <5> configured proposals: IKE:3DES_CBC/HMAC_SHA1_96/PRF_HMAC_SHA1/MODP_1024
+Oct 19 09:08:20 gw1 charon-systemd[812]: 11[CFG] <5> selected proposal: IKE:3DES_CBC/HMAC_SHA1_96/PRF_HMAC_SHA1/MODP_1024
+Oct 19 09:08:20 gw1 charon-systemd[812]: 11[IKE] <legacy|5> authentication of 'legacy.example.net' with pre-shared key successful
+Oct 19 09:08:20 gw1 charon-systemd[812]: 11[IKE] <legacy|5> IKE_SA legacy[5] established between 198.51.100.1[gw1.example.net]...192.0.2.99[legacy.example.net]
+Oct 19 09:08:20 gw1 charon-systemd[812]: 11[IKE] <legacy|5> maximum IKE_SA lifetime 172800s
+Oct 19 09:08:20 gw1 charon-systemd[812]: 11[CFG] <legacy|5> selected proposal: ESP:3DES_CBC/HMAC_SHA1_96/NO_EXT_SEQ
+Oct 19 09:08:20 gw1 charon-systemd[812]: 11[IKE] <legacy|5> CHILD_SA legacy{6} established with SPIs c0ee0001_i 0ff00001_o and TS 10.4.0.0/24 === 10.10.0.0/24
+Oct 19 09:11:40 gw1 charon-systemd[812]: 12[NET] received packet: from 203.0.113.55[500] to 198.51.100.1[500] (300 bytes)
+Oct 19 09:11:40 gw1 charon-systemd[812]: 12[ENC] parsed IKE_SA_INIT request 0 [ SA KE No N(NATD_S_IP) N(NATD_D_IP) ]
+Oct 19 09:11:40 gw1 charon-systemd[812]: 12[IKE] 203.0.113.55 is initiating an IKE_SA
+Oct 19 09:11:40 gw1 charon-systemd[812]: 12[CFG] <6> received proposals: IKE:AES_GCM_16_256/PRF_HMAC_SHA2_384/ECP_384
+Oct 19 09:11:40 gw1 charon-systemd[812]: 12[CFG] <6> selected proposal: IKE:AES_GCM_16_256/PRF_HMAC_SHA2_384/ECP_384
+Oct 19 09:11:41 gw1 charon-systemd[812]: 12[IKE] <6> tried 1 shared key for 'gw1.example.net' - 'unknown.example.net', but MAC mismatched
+Oct 19 09:11:41 gw1 charon-systemd[812]: 12[ENC] <6> generating IKE_AUTH response 1 [ N(AUTH_FAILED) ]

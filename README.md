@@ -5,7 +5,7 @@ Smart India Hackathon 2026 · PS SIH26160 · working prototype.
 Upload a PCAP containing IKEv1/IKEv2 negotiation and ESP/AH traffic. The tool parses the handshakes, rebuilds each tunnel's
 Security Association lifecycle, checks it against a YAML policy pack (NIST SP 800-77r1 / RFC 8221 / RFC 8247), scores behavioural
 anomalies with an Isolation Forest, combines both into a 0–100 risk score, explains it (SHAP + MITRE ATT&CK), and produces remediation
-guidance, an audit PDF, and JSON/syslog(CEF) exports.
+guidance, an audit PDF, a self-contained printable HTML report, and JSON/syslog(CEF) exports.
 
 ```
 PCAP → IKE & ESP parsing → SA reconstruction → Rules + AI detection → Risk score & MITRE mapping → Remediation report
@@ -50,6 +50,8 @@ cd frontend && npm ci && npm run dev                                     # http:
 
 `npm ci` may print a harmless warning that esbuild's postinstall script is not pre-approved; the build works regardless.
 
+**Sample gallery.** The landing page opens on a gallery of bundled captures: each card has a short story and a result preview (top risk, tunnels, violations, the main rules), and one click opens the full analysis. Only the stories are authored (`backend/ipsec_analyzer/api/gallery.py`); every number is computed by the real pipeline when the server starts and is never stored, and a test checks that each preview equals the analysis it opens. A capture without a curated story still gets a card. `GET /api/samples` returns the same data.
+
 **UI smoke test.** With the API and the UI running, `cd frontend && npm run e2e` drives a real browser through upload, a bundled scenario, the results page, a tunnel, and the Evaluation page,
 checking every figure against the API (needs Node 22+ and Chrome, Chromium or Edge; it deletes the analyses it creates). CI runs it on every push and pull request (`e2e` job); it passes `--no-sandbox` automatically when run as root, e.g. in a container.
 
@@ -92,6 +94,25 @@ Optional: `DATABASE_URL=postgresql+psycopg2://…` to use PostgreSQL, `POLICY_PA
   constant (ESP sequencing) the forest has no splits and SHAP is undefined; the UI then says so instead of inventing values. For an envelope group the "why" panel shows each feature's deviation from the benign median in units of the benign median-to-p99 span, and says it is not SHAP.
 * **Risk score**: `risk = 100·(1−(1−R)(1−A))`, `R = 1−∏(1−w_severity)`, `A = 0.30 × anomaly score`. Weights live in the policy YAML; the formula is shown on every tunnel.
 * **MITRE ATT&CK**: curated in the YAML (T1040, T1557, T1110.002, T1600). T1600 "Weaken Encryption" is the closest analogue for protocol downgrade, not an exact fit.
+
+## Live ingestion: daemon logs, a watched folder, syslog
+
+Beyond uploading a PCAP, three ways in, all optional and **off by default**:
+
+| Way in | How | What you get |
+|---|---|---|
+| **strongSwan log upload** | the Analyze page accepts a `charon` log (plain `filelog`, syslog or journald text), or `POST /api/logs` | one tunnel per IKE SA, scored by the same rules, risk and reports as a capture |
+| **Watched folder** | `WATCH_DIR=/path` (plus `WATCH_INTERVAL_S` 5, `WATCH_STABLE_S` 5, `WATCH_KEEP` 100, `WATCH_LIVE_MAX_WAIT_S` 30) | every `.pcap`/`.pcapng` (sibling `x.keys` used if present) and `.log` dropped in the folder is analysed once it has stopped changing; a file that changes later updates its analysis in place |
+| **UDP syslog** | `SYSLOG_LISTEN=0.0.0.0:5514`, optional `SYSLOG_ALLOW=10.0.0.0/8,…`, `SYSLOG_MAX_MB` 8 | a gateway's rsyslog (`if $programname startswith 'charon' then @host:5514`) feeds one live analysis per source IP, refreshed as lines arrive |
+
+`GET /api/ingest/status` (and the Analyze page's *Live ingest* panel) shows what is being watched, per-file errors and syslog sources. For near-live packet capture, rotate captures into the watched folder: `tcpdump -i eth0 -G 60 -w '/path/cap-%FT%T.pcap' 'udp port 500 or udp port 4500 or esp'`.
+
+**What a log can and cannot tell you.** The daemon logs every proposal it received and the one it selected, so negotiated IKE and child-SA algorithms, PFS on rekeys, authentication method, IKEv1 aggressive mode, lifetimes, retransmits, failed attempts and downgrade retries are all assessable **without decryption keys**. Message sizes, handshake timing, ESP sequence numbers and unanswered-handshake floods are wire facts: they are not in a log, so the anomaly model is not applied and those rules cannot fire (each log tunnel carries a `COV-LOG-SOURCE` coverage note saying so). Honest limits:
+
+* The parser follows strongSwan's message layout and is tested on **hand-written fixtures** (`data/logs/`, labelled *hand-written sample log* in the UI) plus synthetic edge cases; no log from a live daemon was available in the development sandbox. `python lab/generate.py` now also saves real `*.charon.log` files next to each lab capture (key hexdumps stripped), and a test checks them when present. Try it on your own log first: `python -m ipsec_analyzer.ingest.charon your.log`.
+* strongSwan only (not Libreswan or others). Proposal lines need `cfg = 2`; without them a child SA is reported with its algorithms "not assessed". Timestamps without a year or zone are read as UTC in the current year; syslog lines are stamped with the receive time.
+* Polling, not inotify: latency is the scan interval plus the settle time. UDP syslog is unauthenticated and lossy; restrict the port and use `SYSLOG_ALLOW`. TCP/TLS syslog is not implemented, and log rotation on the receiver drops the oldest half of a file (which can cut off the early lines of a long-lived SA).
+* Nothing here sniffs a network interface. The watcher only reads files other tools wrote.
 
 ## Access control and limits
 
@@ -136,8 +157,8 @@ Behavioural families (all simulator-only, designed by us): oversize handshakes 6
 
 ## API
 
-`POST /api/analyses` (multipart `pcap`, optional `keys`) · `POST /api/samples/{name}/analyze` · `GET /api/analyses/{id}` (status + stage) ·
-`…/tunnels` · `…/tunnels/{tid}` (SA detail, findings, risk, SHAP) · `…/remediation` · `…/report.pdf` · `…/export.json` · `…/export.syslog` ·
+`POST /api/analyses` (multipart `pcap`, optional `keys`) · `POST /api/logs` (multipart `log`, a strongSwan daemon log) · `GET /api/ingest/status` · `POST /api/samples/{name}/analyze` · `GET /api/analyses/{id}` (status + stage) ·
+`…/tunnels` · `…/tunnels/{tid}` (SA detail, findings, risk, SHAP) · `…/remediation` · `…/report.pdf` · `…/report.html` (self-contained, printable; `?download=1` saves it) · `…/export.json` · `…/export.syslog` ·
 `GET /api/compare?before={id}&after={id}` (risk change, rules fixed/new/remaining, tunnels matched by peer pair) ·
 `GET /api/metrics` · `GET /api/policy` (rules with description, sources, ATT&CK and fix; algorithm tiers; risk formula) · `GET /api/health`. Interactive docs at `/docs`.
 
@@ -145,7 +166,7 @@ The **Compare** page in the UI uses that endpoint: pick a capture from before a 
 
 ## Honest list of corners cut
 
-* Lab traffic is strongSwan-only (no Libreswan), one host, LAN-like latency; no CIC-IDS2018 (not IPsec-labelled, not used); no live NIC capture — the UI's "Replay capture" animates a stored handshake timeline.
+* Lab traffic is strongSwan-only (no Libreswan), one host, LAN-like latency; no CIC-IDS2018 (not IPsec-labelled, not used); no live NIC capture (a watched folder, UDP syslog and log upload bring data in, but nothing sniffs an interface) — the UI's "Replay capture" animates a stored handshake timeline.
 * PyShark/TShark not used; PyTorch autoencoder not adopted (scikit-learn experiment in `docs/AUTOENCODER.md`); IKEv1 phase-2 and keyless IKEv2 child SAs not observable without keys (IKEv1 Quick Mode needs a supplied key table; none was produced from the lab yet).
 * IKEv2 NAT-T is handled (marker, UDP-encapsulated ESP) but only exercised lightly; IPv6 decoding is minimal; AH is counted, not analysed in depth.
 * One capture per analysis, 256 MB default cap (configurable). Optional shared-key auth with a read-only role, but no per-user accounts, audit log or RBAC.

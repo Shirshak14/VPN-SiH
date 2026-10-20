@@ -13,10 +13,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..reports.export import to_json, to_syslog
+from ..reports.html import build_html
 from ..reports.pdf import build_pdf
-from ..rules.policy import SEV_ORDER
+from ..reports.summary import remediation_plan
 from ..scoring import FORMULA
-from . import accounts, auth, service
+from ..ingest.charon import looks_like_charon
+from . import accounts, auth, gallery, live, service
 from .compare import compare
 from .db import DATA_DIR, Analysis, TunnelRow, User, init_db
 
@@ -27,6 +29,11 @@ MAX_KEYS_UPLOAD = 1024 * 1024  # a key table is a few KB; anything bigger is not
 PCAP_MAGICS = {b"\xd4\xc3\xb2\xa1", b"\xa1\xb2\xc3\xd4", b"\x4d\x3c\xb2\xa1", b"\xa1\xb2\x3c\x4d", b"\x0a\x0d\x0d\x0a"}
 CAPTURES = DATA_DIR / "captures"
 PUBLIC = DATA_DIR / "public"
+LOGS = DATA_DIR / "logs"
+LOG_SAMPLES = {
+    "strongswan_gateway.log": "Hand-written strongSwan gateway log (syslog format): six IKE SAs - compliant, weak suite chosen, downgrade retry, IKEv1 aggressive PSK, auth failure",
+    "strongswan_initiator_filelog.log": "Hand-written strongSwan initiator log (filelog format): handshake retransmits, then a compliant tunnel",
+}
 
 app = FastAPI(title="IPsec VPN Analyzer", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -34,11 +41,22 @@ auth.install(app)  # no-op until API_KEY is set
 app.include_router(accounts.router)
 
 
+def _warm() -> None:
+    service.warm_up()
+    gallery.warm_previews(_samples(), service.get_engine(), service.get_model())  # headline numbers for the gallery cards
+
+
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
     service.get_engine()  # fail fast on a malformed policy pack
-    threading.Thread(target=service.warm_up, name="warm-up", daemon=True).start()  # first analysis then runs warm
+    threading.Thread(target=_warm, name="warm-up", daemon=True).start()  # first analysis then runs warm
+    live.start(MAX_UPLOAD)  # watched folder / syslog listener, only if WATCH_DIR / SYSLOG_LISTEN are set
+
+
+@app.on_event("shutdown")
+def _shutdown() -> None:
+    live.stop()
 
 
 db = accounts.get_session  # one session per request, shared with the current_user dependency
@@ -106,6 +124,9 @@ def _samples() -> dict[str, dict[str, Any]]:
                 out[n] = {"name": n, "provenance": "real-lab", "pcap": CAPTURES / "lab" / m["file"],
                           "keys": CAPTURES / "lab" / m["keys"] if m.get("keys") else None,
                           "description": f"Real strongSwan 5.9.8 traffic from the Docker lab. Scenario: {m['description']}"}
+    for lf, desc in LOG_SAMPLES.items():
+        if (LOGS / lf).exists():
+            out[lf] = {"name": lf, "provenance": "sample-log", "input": "log", "pcap": LOGS / lf, "keys": None, "description": desc}
     pm = PUBLIC / "manifest.json"
     if pm.exists():
         man = json.loads(pm.read_text())
@@ -120,8 +141,10 @@ def _samples() -> dict[str, dict[str, Any]]:
 
 @app.get("/api/samples")
 def samples() -> list[dict[str, Any]]:
-    return [{k: v for k, v in s.items() if k not in ("pcap", "keys")} | {"has_keys": s["keys"] is not None}
-            for s in _samples().values()]
+    """Gallery entries, curated order first. `preview` is null until the background warm-up has analysed that capture."""
+    rows = [{k: v for k, v in s.items() if k not in ("pcap", "keys")} | {"has_keys": s["keys"] is not None, "input": s.get("input", "pcap")}
+            | gallery.describe(s["name"], s["description"], s["provenance"]) for s in _samples().values()]
+    return sorted(rows, key=lambda r: r["order"])
 
 
 @app.get("/api/policy")
@@ -177,6 +200,42 @@ async def create_analysis(request: Request, bg: BackgroundTasks, pcap: UploadFil
     return _analysis_dict(a)
 
 
+@app.post("/api/logs", status_code=202)
+async def create_log_analysis(request: Request, bg: BackgroundTasks, log: UploadFile = File(...), s: Session = Depends(db),
+                              user: User | None = Depends(accounts.current_user)) -> dict[str, Any]:
+    """Analyse a strongSwan daemon log (plain file, syslog or journald text) instead of a packet capture."""
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > MAX_UPLOAD + 65536:
+        raise HTTPException(413, f"request exceeds the {MAX_UPLOAD // 2**20} MB upload limit (set MAX_UPLOAD_MB to change it)")
+    head = await log.read(65536)
+    if not looks_like_charon(head):
+        raise HTTPException(400, "no strongSwan charon log lines found (expected lines like '12[IKE] ...'); only strongSwan logs are read")
+    a = Analysis(filename=(log.filename or "charon.log")[:255], provenance="user-upload", has_keys=0, owner_id=user.id if user else None)
+    s.add(a)
+    s.commit()
+    d = DATA_DIR / "uploads" / str(a.id)
+    d.mkdir(parents=True, exist_ok=True)
+    size = len(head)
+    with open(d / "charon.log", "wb") as f:
+        f.write(head)
+        while chunk := await log.read(1 << 20):
+            size += len(chunk)
+            if size > MAX_UPLOAD:
+                shutil.rmtree(d, ignore_errors=True)
+                s.delete(a)
+                s.commit()
+                raise HTTPException(413, f"log exceeds the {MAX_UPLOAD // 2**20} MB upload limit (set MAX_UPLOAD_MB to change it)")
+            f.write(chunk)
+    bg.add_task(service.run_analysis, a.id, d / "charon.log", None, "log")
+    return _analysis_dict(a)
+
+
+@app.get("/api/ingest/status")
+def ingest_status() -> dict[str, Any]:
+    """What the watched folder and the syslog listener are doing (both are off unless configured by environment)."""
+    return live.status()
+
+
 @app.post("/api/samples/{name}/analyze", status_code=202)
 def analyze_sample(name: str, bg: BackgroundTasks, s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> dict[str, Any]:
     smp = _samples().get(name)
@@ -185,7 +244,7 @@ def analyze_sample(name: str, bg: BackgroundTasks, s: Session = Depends(db), use
     a = Analysis(filename=name, provenance=smp["provenance"], has_keys=int(smp["keys"] is not None), owner_id=user.id if user else None)
     s.add(a)
     s.commit()
-    bg.add_task(service.run_analysis, a.id, smp["pcap"], smp["keys"])
+    bg.add_task(service.run_analysis, a.id, smp["pcap"], smp["keys"], smp.get("input", "pcap"))
     return _analysis_dict(a)
 
 
@@ -250,18 +309,7 @@ def get_tunnel(aid: int, tid: str, s: Session = Depends(db), user: User | None =
 def remediation(aid: int, s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> list[dict[str, Any]]:
     """Consolidated remediation plan: each remediation once, with the rules/tunnels that need it."""
     _done(s, aid, user)
-    plan: dict[str, dict[str, Any]] = {}
-    for p in _tunnels(s, aid):
-        for f in p["findings"]:
-            if f["category"] != "violation":
-                continue
-            r = plan.setdefault(f["remediation"]["id"], {**f["remediation"], "rules": set(), "tunnels": set(), "severity": f["severity"]})
-            r["rules"].add(f["rule_id"])
-            r["tunnels"].add(p["tunnel"]["id"])
-            if SEV_ORDER[f["severity"]] < SEV_ORDER[r["severity"]]:
-                r["severity"] = f["severity"]
-    return sorted(({**v, "rules": sorted(v["rules"]), "tunnels": sorted(v["tunnels"])} for v in plan.values()),
-                  key=lambda v: SEV_ORDER[v["severity"]])
+    return remediation_plan(_tunnels(s, aid))
 
 
 @app.get("/api/analyses/{aid}/report.pdf")
@@ -269,6 +317,15 @@ def report_pdf(aid: int, s: Session = Depends(db), user: User | None = Depends(a
     a = _done(s, aid, user)
     pdf = build_pdf(_analysis_dict(a), _tunnels(s, aid))
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="ipsec-report-{aid}.pdf"'})
+
+
+@app.get("/api/analyses/{aid}/report.html")
+def report_html(aid: int, download: bool = False, s: Session = Depends(db), user: User | None = Depends(accounts.current_user)) -> Response:
+    """Self-contained printable report. Opens in the browser by default; ?download=1 saves it as a file to share."""
+    a = _done(s, aid, user)
+    headers = {"Content-Disposition": f'attachment; filename="ipsec-report-{aid}.html"'} if download else {}
+    headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'"
+    return Response(build_html(_analysis_dict(a), _tunnels(s, aid)), media_type="text/html; charset=utf-8", headers=headers)
 
 
 @app.get("/api/analyses/{aid}/export.json")

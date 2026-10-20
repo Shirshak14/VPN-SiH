@@ -19,6 +19,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const KEY = process.env.API_KEY || "";
 const AUTH = KEY ? { "X-API-Key": KEY } : {};  // node-side requests; the browser signs in through the UI
 const PCAP = path.resolve(HERE, "../../data/captures/synthetic/demo_gateway_audit.pcap");
+const LOG = path.resolve(HERE, "../../data/logs/strongswan_gateway.log");
 
 function findBrowser() {
   const c = [process.env.CHROME_PATH,
@@ -30,7 +31,7 @@ function findBrowser() {
 }
 
 if (typeof WebSocket === "undefined") { console.error("Node >= 22 is required (global WebSocket)."); process.exit(2); }
-if (!existsSync(PCAP)) { console.error("Missing fixture " + PCAP); process.exit(2); }
+if (!existsSync(PCAP) || !existsSync(LOG)) { console.error("Missing fixture " + PCAP); process.exit(2); }
 const browser = findBrowser();
 if (!browser) { console.error("No Chrome/Chromium/Edge found. Set CHROME_PATH."); process.exit(2); }
 try { await fetch(BASE + "/api/health"); } catch { console.error(`App not reachable at ${BASE} (start the API and the UI first).`); process.exit(2); }
@@ -90,12 +91,12 @@ try {
   // ---- 0. sign-in (only when the API is started with API_KEY)
   await nav(BASE + "/");
   if (KEY) {
-    check("locked server shows the sign-in form, not the app", await waitFor(() => !!document.querySelector("form.login") && !document.querySelector(".az-samples")));
+    check("locked server shows the sign-in form, not the app", await waitFor(() => !!document.querySelector("form.login") && !document.querySelector(".gal-grid")));
     const typeKey = async (text) => { await run(() => { const i = document.getElementById("api-key"); i.focus(); i.select(); }); await send("Input.insertText", { text }); };
     await typeKey("definitely-wrong"); await run(() => document.querySelector("form.login button.primary").click());
-    check("wrong key shows an error and stays locked", await waitFor(() => !!document.querySelector("form.login [role=alert]")) && await run(() => !document.querySelector(".az-samples")));
+    check("wrong key shows an error and stays locked", await waitFor(() => !!document.querySelector("form.login [role=alert]")) && await run(() => !document.querySelector(".gal-grid")));
     await typeKey(KEY); await run(() => document.querySelector("form.login button.primary").click());
-    check("correct key unlocks the app", await waitFor(() => !document.querySelector("form.login") && document.querySelectorAll(".az-samples li").length > 5));
+    check("correct key unlocks the app", await waitFor(() => !document.querySelector("form.login") && document.querySelectorAll(".gal-card").length > 5));
     check("signed-in session shows Sign out", await run(() => !!document.querySelector("button.linklike")));
     problems.length = 0;  // the browser logs every deliberate 401 (locked state, wrong key); only errors after sign-in count
   }
@@ -109,9 +110,26 @@ try {
   check("Evaluation URL is clean", (await run(() => location.href)) === BASE + "/#/eval");
   check("active nav link has aria-current=page", (await run(() => document.querySelector("nav a[aria-current=page]")?.textContent)) === "Evaluation");
   await clickNav("Analyze");
-  check("Analyze page opens again", await waitFor(() => document.querySelectorAll(".az-samples li").length > 5));
+  check("Analyze page opens again", await waitFor(() => document.querySelectorAll(".gal-card").length > 5));
   check("Analyze URL is clean", (await run(() => location.href)) === BASE + "/#/");
-  check("synthetic scenarios carry the SYNTHETIC (SIMULATED) label", await run(() => [...document.querySelectorAll(".az-samples li")].filter((l) => l.querySelector(".prov-synthetic")).every((l) => l.querySelector(".prov-synthetic").textContent.toLowerCase().includes("synthetic (simulated)"))));
+  check("synthetic scenarios carry the SYNTHETIC (SIMULATED) label", await run(() => [...document.querySelectorAll(".gal-card")].filter((l) => l.querySelector(".prov-synthetic")).every((l) => l.querySelector(".prov-synthetic").textContent.toLowerCase().includes("synthetic (simulated)"))));
+
+  // ---- 1b. sample gallery: cards mirror the API, filters work, phone width does not overflow
+  const SAMPLES = await api("/api/samples");
+  check("gallery shows one card per bundled capture, in the API's order", JSON.stringify(await run(() => [...document.querySelectorAll(".gal-card h3")].map((h) => h.textContent))) === JSON.stringify(SAMPLES.map((x) => x.title)), `${SAMPLES.length} cards`);
+  check("every card shows its computed result (no card left scoring)", await waitFor(() => document.querySelectorAll(".gal-result .spinner").length === 0 && document.querySelectorAll(".gal-score").length === document.querySelectorAll(".gal-card").length));
+  const fresh = await api("/api/samples");
+  check("card scores and violation counts equal the API preview", JSON.stringify(await run(() => [...document.querySelectorAll(".gal-card")].map((c) => [c.querySelector(".gal-score").textContent, c.querySelector(".gal-result .small").textContent.match(/(no|\d+) violation/)[1]]))) === JSON.stringify(fresh.map((x) => [String(x.preview.top_score), x.preview.violations === 0 ? "no" : String(x.preview.violations)])));
+  const weakN = SAMPLES.filter((x) => x.kind === "weak").length;
+  await run(() => [...document.querySelectorAll(".gal-filter button")].find((b) => b.textContent === "Weak crypto").click());
+  check("the Weak crypto filter keeps only weak-crypto cards", await run((n) => document.querySelectorAll(".gal-card").length === n && !!document.querySelector(".gal-filter button[aria-pressed=true]")?.textContent.includes("Weak"), weakN), `${weakN} cards`);
+  await run(() => [...document.querySelectorAll(".gal-filter button")].find((b) => b.textContent === "All").click());
+  check("All restores every card", await run((n) => document.querySelectorAll(".gal-card").length === n, SAMPLES.length));
+  await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await sleep(300);
+  check("landing page does not overflow a 390px phone", await run(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), await run(() => `${document.documentElement.scrollWidth} > ${document.documentElement.clientWidth}`));
+  check("gallery buttons are at least 44px tall on a phone", await run(() => [...document.querySelectorAll(".gal-card button")].every((b) => b.getBoundingClientRect().height >= 44)));
+  await send("Emulation.clearDeviceMetricsOverride");
   check("Analyze capture is disabled until a file is chosen", await run(() => document.querySelector(".az-go").disabled));
 
   // ---- 2. real file upload -> results
@@ -137,7 +155,9 @@ try {
     && await run(() => !!(document.querySelector("table").compareDocumentPosition(document.querySelector(".dist")) & Node.DOCUMENT_POSITION_FOLLOWING)));
   check("an uploaded capture is labelled user upload, not synthetic", await run(() => document.querySelector("h1 .badge")?.textContent.toLowerCase() === "user upload" && !document.querySelector(".banner.compact")));
   check("table keeps all six columns", (await run(() => [...document.querySelectorAll("thead th")].map((t) => t.textContent).join("|"))) === "Risk|Peers|Mode|Negotiated IKE suite|Findings|Anomaly");
-  for (const [file, type] of [["report.pdf", "pdf"], ["export.json", "json"], ["export.syslog", "text"]]) {
+  check("results page offers the printable report, PDF, HTML, link, JSON and syslog", JSON.stringify(await run(() => [...document.querySelectorAll(".res-actions > *")].slice(0, 6).map((e) => e.textContent.trim()))) === JSON.stringify(["Open printable report", "Download PDF", "Download HTML", "Copy report link", "JSON", "Syslog / CEF"]));
+  check("printable report opens in a new tab", await run(() => { const a = document.querySelector(".res-actions a.primary"); return a.target === "_blank" && a.getAttribute("href").endsWith("/report.html"); }));
+  for (const [file, type] of [["report.pdf", "pdf"], ["report.html", "html"], ["export.json", "json"], ["export.syslog", "text"]]) {
     const r = await fetch(`${BASE}/api/analyses/${aid}/${file}`, { headers: AUTH }); await r.arrayBuffer();
     check(`download ${file} works`, r.status === 200 && (r.headers.get("content-type") || "").includes(type), r.headers.get("content-type"));
   }
@@ -163,12 +183,34 @@ try {
 
   // ---- 4. bundled scenario button
   await nav(BASE + "/#/");
-  await waitFor(() => document.querySelectorAll(".az-samples li button").length > 0);
+  await waitFor(() => document.querySelectorAll(".gal-card button").length > 0);
   const before = (await api("/api/analyses")).map((a) => a.id);
-  await run(() => document.querySelector(".az-samples li button").click());
+  const card0 = await run(() => ({ title: document.querySelector(".gal-card h3").textContent, score: document.querySelector(".gal-score").textContent, tunnels: document.querySelector(".gal-result .small").textContent.split(" ")[0] }));
+  await run(() => document.querySelector(".gal-card button").click());
   check("bundled scenario opens the results page", await waitFor(() => /^#\/a\/\d+$/.test(location.hash) && !!document.querySelector(".res-summary"), [], 40000), await hash());
   for (const a of await api("/api/analyses")) if (!before.includes(a.id)) created.push(a.id);
+  check("the card's preview matches the analysis it opens", await run((c) => document.querySelector(".hero-score").textContent === c.score && document.querySelector(".kpis li b").textContent === c.tunnels, card0), JSON.stringify(card0));
   check("synthetic scenario results show the compact SYNTHETIC notice with its original wording", await run(() => { const b = document.querySelector(".banner.compact"); return !!b && b.textContent.includes("Simulated capture.") && b.textContent.includes("not a captured real-world incident") && document.querySelector("h1 .badge")?.textContent.toLowerCase().includes("synthetic (simulated)"); }));
+
+  // ---- 4b. strongSwan daemon log: upload through the UI, results come from the log, not from packets
+  await nav(BASE + "/#/");
+  check("Analyze page has the Live ingest section", await waitFor(() => !!document.querySelector(".az-live") && document.querySelector(".az-live h2")?.textContent === "Live ingest"));
+  const docL = await send("DOM.getDocument", { depth: 1 });
+  const inputL = await send("DOM.querySelector", { nodeId: docL.result.root.nodeId, selector: ".az-drop input[type=file]" });
+  await send("DOM.setFileInputFiles", { nodeId: inputL.result.nodeId, files: [LOG] });
+  check("a log file is accepted and the button says so", await waitFor(() => document.querySelector(".az-file")?.textContent === "strongswan_gateway.log" && document.querySelector(".az-go").textContent.startsWith("Analyze log")));
+  const beforeL = (await api("/api/analyses")).map((a) => a.id);
+  await run(() => document.querySelector(".az-go").click());
+  check("log upload opens the results page", await waitFor(() => /^#\/a\/\d+$/.test(location.hash) && !!document.querySelector(".res-summary .hero-score"), [], 40000), await hash());
+  for (const a of await api("/api/analyses")) if (!beforeL.includes(a.id)) created.push(a.id);
+  const aidL = Number((await hash()).split("/")[2]);
+  const TL = await api(`/api/analyses/${aidL}/tunnels`);
+  check("log results say they come from a daemon log", await run(() => [...document.querySelectorAll(".banner.compact")].some((b) => b.textContent.includes("Assessed from a daemon log, not from packets"))));
+  check("log results list one tunnel per IKE SA, as the API does", await run((n) => document.querySelectorAll("tbody tr.click").length === n, TL.length) && TL.length === 6, `${TL.length} tunnels`);
+  check("log risk matches the API", (await run(() => document.querySelector(".hero-score").textContent)) === String(Math.max(...TL.map((t) => t.risk.score))));
+  await run(() => document.querySelector("tbody tr.click").click());
+  check("a log-derived tunnel opens without a timeline", await waitFor(() => [...document.querySelectorAll("h2")].some((h) => h.textContent.startsWith("Rule-engine findings"))));
+  check("its coverage note explains the log source", await run(() => document.body.innerText.includes("Assessed from a daemon log, not from packets")));
 
   // ---- 5. Evaluation page: every number comes from /api/metrics
   const M = await api("/api/metrics");
@@ -203,8 +245,8 @@ try {
   check("the top bar shows the signed-in account", await run((e) => document.querySelector(".acct-link")?.textContent === e, email));
   const hadBefore = (await api("/api/analyses")).length;
   await nav(BASE + "/#/");
-  await waitFor(() => document.querySelectorAll(".az-samples li button").length > 0);
-  await run(() => document.querySelector(".az-samples li button").click());
+  await waitFor(() => document.querySelectorAll(".gal-card button").length > 0);
+  await run(() => document.querySelector(".gal-card button").click());
   check("analysing while signed in works", await waitFor(() => /^#\/a\/\d+$/.test(location.hash) && !!document.querySelector(".res-summary"), [], 40000), await hash());
   await nav(BASE + "/#/history");
   check("the analysis appears in saved history, marked private", await waitFor(() => document.querySelectorAll("tbody tr").length === 1));
@@ -230,6 +272,16 @@ try {
   await run(() => [...document.querySelectorAll("button")].find((b) => b.textContent.startsWith("Delete my account")).click());
   await typeInto("pw-del", pw); await submitForm("Delete account");
   check("deleting the account signs out and erases the saved analysis", await waitFor(() => document.querySelector(".acct-link")?.textContent === "Sign in") && (await api("/api/analyses")).length === hadBefore);
+  // ---- 7. printable report: renders in the browser, lists every tunnel, hides its toolbar when printing
+  await nav(`${BASE}/api/analyses/${aid}/report.html`);
+  check("report page renders with its title and one section per tunnel", await waitFor((n) => document.querySelector("h1")?.textContent === "IPsec VPN Security Assessment" && document.querySelectorAll("section.tunnel").length === n, [T.length]));
+  check("report summary and remediation match the API", await run((top, n) => Number(document.body.innerText.match(/([\d.]+)\/100/)?.[1]) === top && [...document.querySelectorAll(".fix")].length === n, top, rem.length), `top=${top} rem=${rem.length}`);
+  check("report has no external resources and fits the viewport", await run(() => !document.querySelector("link,img,iframe,[src]") && document.documentElement.scrollWidth <= document.documentElement.clientWidth));
+  await send("Emulation.setEmulatedMedia", { media: "print" });
+  check("toolbar is hidden when printing", await run(() => getComputedStyle(document.querySelector(".toolbar")).display === "none"));
+  await send("Emulation.setEmulatedMedia", { media: "" });
+  const pdf = await send("Page.printToPDF", { printBackground: true });
+  check("browser can print the report to PDF", (pdf.result?.data || "").length > 5000, `${((pdf.result?.data || "").length * 0.75 / 1024).toFixed(0)} KB`);
 
   check("no console errors or exceptions during the whole run", problems.length === 0, problems.slice(0, 3).join(" || "));
 } catch (e) {
