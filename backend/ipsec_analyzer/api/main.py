@@ -19,7 +19,7 @@ from ..reports.summary import remediation_plan
 from ..scoring import FORMULA
 from ..vpn import config as vpn_config
 from ..ingest.charon import looks_like_charon
-from . import accounts, auth, gallery, live, service
+from . import accounts, alerts, auth, gallery, live, service
 from .compare import compare
 from .db import DATA_DIR, Analysis, TunnelRow, User, init_db
 
@@ -51,6 +51,7 @@ app = FastAPI(title="IPsec VPN Analyzer", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 auth.install(app)  # no-op until API_KEY is set
 app.include_router(accounts.router)
+app.include_router(alerts.router)
 
 
 def _warm() -> None:

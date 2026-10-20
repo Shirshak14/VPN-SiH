@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AccountState, api, AUTH_EVENT, AuthState } from "./api";
 import Account from "./pages/Account";
+import Alerts from "./pages/Alerts";
 import Analyze from "./pages/Analyze";
 import Compare from "./pages/Compare";
 import Evaluation from "./pages/Evaluation";
@@ -82,6 +83,9 @@ export default function App() {
   } else if (p[0] === "history") {
     page = <History account={account} />;
     active = "history";
+  } else if (p[0] === "alerts") {
+    page = <Alerts account={account} />;
+    active = "alerts";
   } else if (p[0] === "account") {
     page = <Account account={account} onChange={refreshAccount} />;
     active = "account";
@@ -102,6 +106,7 @@ export default function App() {
         <nav className="nav" aria-label="Main">
           <a href="#/" className={active === "analyze" ? "active" : ""} aria-current={active === "analyze" ? "page" : undefined}>Analyze</a>
           {account.user && <a href="#/history" className={active === "history" ? "active" : ""} aria-current={active === "history" ? "page" : undefined}>History</a>}
+          {account.user && <a href="#/alerts" className={active === "alerts" ? "active" : ""} aria-current={active === "alerts" ? "page" : undefined}>Alerts</a>}
           <a href="#/compare" className={active === "compare" ? "active" : ""} aria-current={active === "compare" ? "page" : undefined}>Compare</a>
           <a href="#/policy" className={active === "policy" ? "active" : ""} aria-current={active === "policy" ? "page" : undefined}>Policy</a>
           <a href="#/eval" className={active === "eval" ? "active" : ""} aria-current={active === "eval" ? "page" : undefined}>Evaluation</a>

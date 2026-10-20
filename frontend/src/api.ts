@@ -34,6 +34,28 @@ export interface SamplePreview {
   rules: { rule_id: string; severity: string }[];
   rule_count: number;
 }
+export interface AlertSettings {
+  enabled: boolean;
+  min_risk: number;
+  email_enabled: boolean;
+  email_to: string;
+  webhook_enabled: boolean;
+  webhook_url: string | null; // masked by the server
+  webhook_secret: string | null;
+  smtp_available: boolean;
+  allow_private: boolean;
+}
+export interface AlertEvent {
+  id: number;
+  analysis_id: number | null;
+  channel: "email" | "webhook";
+  status: "sent" | "failed";
+  detail: string;
+  tunnels: number;
+  top_risk: number | null;
+  test: boolean;
+  created_at: string;
+}
 export interface Sample {
   name: string;
   provenance: string;
@@ -76,6 +98,10 @@ export const api = {
   auth: () => req<AuthState>("/api/auth"),
   login: (key: string) => req<{ role: string }>("/api/login", jsonInit("POST", { key })),
   logout: () => req<{ ok: boolean }>("/api/logout", { method: "POST" }),
+  alerts: () => req<{ settings: AlertSettings; events: AlertEvent[] }>("/api/alerts"),
+  saveAlerts: (patch: Partial<Omit<AlertSettings, "webhook_url">> & { webhook_url?: string; rotate_secret?: boolean }) =>
+    req<AlertSettings>("/api/alerts", jsonInit("PUT", patch)),
+  testAlerts: () => req<{ results: AlertEvent[] }>("/api/alerts/test", { method: "POST" }),
   account: () => req<AccountState>("/api/account"),
   register: (email: string, password: string) => req<{ user: User }>("/api/account/register", jsonInit("POST", { email, password })),
   signIn: (email: string, password: string) => req<{ user: User }>("/api/account/login", jsonInit("POST", { email, password })),

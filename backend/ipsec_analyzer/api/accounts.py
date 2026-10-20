@@ -217,7 +217,8 @@ async def delete_account(request: Request, response: Response, user: dbm.User = 
     for a in s.scalars(select(dbm.Analysis).where(dbm.Analysis.owner_id == user.id)).all():
         shutil.rmtree(dbm.DATA_DIR / "uploads" / str(a.id), ignore_errors=True)
         s.delete(a)
-    s.execute(delete(dbm.UserSession).where(dbm.UserSession.user_id == user.id))
+    for model in (dbm.UserSession, dbm.AlertEvent, dbm.AlertSettings):  # SQLite does not enforce ON DELETE CASCADE
+        s.execute(delete(model).where(model.user_id == user.id))
     s.delete(user)
     s.commit()
     out = Response(status_code=204)

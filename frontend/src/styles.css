@@ -343,6 +343,19 @@ tbody tr.click:focus-visible { outline: 3px solid var(--focus); outline-offset: 
 .name-input { padding: var(--sp-1) var(--sp-2); border: 1px solid var(--brand); border-radius: 6px; background: var(--surface); color: inherit; font: inherit; width: 22ch; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .az-note { margin: 0 0 var(--sp-3); }
+
+/* ---- alerts ---- */
+.alerts { max-width: 46rem; margin: 0 auto; }
+.alerts input[type="email"], .alerts input[type="url"] { padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: inherit; font: inherit; width: 100%; }
+.al-fs { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--sp-3) var(--sp-4) var(--sp-4); margin: 0; display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.al-fs legend { font-size: var(--fs-meta); font-weight: var(--fw-semibold); text-transform: uppercase; letter-spacing: var(--ls-label); color: var(--muted); padding: 0 var(--sp-2); }
+.al-fs:disabled { opacity: 0.55; }
+.al-fs p { margin: 0; }
+.al-val { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
+.al-secret code { overflow-wrap: anywhere; }
+.switch { display: inline-flex; align-items: center; gap: var(--sp-2); font-weight: var(--fw-medium); cursor: pointer; }
+.switch input { width: 1.1rem; height: 1.1rem; accent-color: var(--brand); }
+input[type="range"] { flex: 1; min-width: 8rem; accent-color: var(--brand); }
 /* ---- Sample gallery: one-click demo analyses ---- */
 .gal-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; margin-bottom: var(--sp-4); }
 .gal-head h2 { margin-bottom: var(--sp-1); }
